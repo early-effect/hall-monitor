@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+
+# sbt
+.sbt/
+dist/*
+target/
+out/
+lib_managed/
+src_managed/
+project/boot/
+project/plugins/project/
+project/local-plugins.sbt
+.history
+local.sbt
+build.sbt.semanticdb
+
+# Bloop / Metals
+.bsp
+.bloop/
+.metals/
+metals.sbt
+project/target/
+project/project/
+
+# editors
+.vscode/
+.cursor/
+.idea
+.idea_modules
+.worksheet/
+
+# local harness
+.mcp.json
+.claude/
+.grok/
+CLAUDE.md

@@ -1,0 +1,114 @@
+# Copy a [[backends]] table to add a model.
+# On the process key and on every backend, set apiKey or apiKeyEnv, not both.
+# Root keys go before the first table. A key after [listen] belongs to listen.
+# The classifier sees request text, including PII. Keep it local unless you mean to send that text out.
+
+apiKeyEnv = "HALL_MONITOR_API_KEY"
+maxStateChars = 16000
+upstreamIdleSeconds = 300
+defaultPrefer = ["public-fast"]
+
+[listen]
+host = "127.0.0.1"
+port = 8080
+
+[classifier]
+baseUrl = "http://127.0.0.1:8091"
+model = "jev-latest"
+timeoutSeconds = 10
+apiKey = "local"
+
+[[backends]]
+id = "public-fast"
+kind = "conversational"
+baseUrl = "https://api.x.ai/v1"
+upstreamModel = "grok-4-fast"
+apiKeyEnv = "XAI_API_KEY"
+aliases = ["grok-fast"]
+
+[[backends]]
+id = "public-heavy"
+kind = "conversational"
+baseUrl = "https://api.x.ai/v1"
+upstreamModel = "grok-4"
+apiKeyEnv = "XAI_API_KEY"
+
+[[backends]]
+id = "local-strong"
+kind = "conversational"
+baseUrl = "http://127.0.0.1:11434/v1"
+upstreamModel = "qwen-strong"
+apiKey = "ollama"
+
+[[backends]]
+id = "jev-public"
+kind = "decision"
+baseUrl = "https://api.typesafe.ai"
+upstreamModel = "jev-latest"
+apiKeyEnv = "JEV_API_KEY"
+
+[[backends]]
+id = "jev-vpc"
+kind = "decision"
+baseUrl = "https://jev.internal.example"
+upstreamModel = "jev-latest"
+apiKeyEnv = "JEV_VPC_API_KEY"
+
+[[criteria]]
+id = "pii"
+kind = "noul"
+instructions = "The request contains personal data, secrets, or regulated identifiers."
+yes = "Names, emails, account numbers, health data, credentials, or private customer data appear."
+no = "No personal or secret data."
+
+[[criteria]]
+id = "weight"
+kind = "score"
+instructions = "How heavy is the reasoning this request needs?"
+levels = ["trivial", "light", "moderate", "heavy"]
+faces = ["conversational"]
+
+[[criteria]]
+id = "task"
+kind = "choice"
+instructions = "What kind of work is this?"
+faces = ["conversational"]
+
+[criteria.options]
+coding-light = "A small edit, rename, format, or short snippet."
+coding-heavy = "Architecture, a large refactor, or multi-file design."
+chat = "Conversation, explanation, or writing without a code change."
+
+[[rules]]
+id = "pii-lock"
+type = "constraint"
+allow = ["local-strong", "jev-vpc"]
+
+[[rules.when]]
+criterion = "pii"
+yesAtLeast = 0.4
+
+[[rules]]
+id = "light-code"
+type = "preference"
+prefer = ["public-fast"]
+
+[[rules.when]]
+criterion = "task"
+choice = ["coding-light"]
+minConfidence = 0.5
+
+[[rules.when]]
+criterion = "weight"
+atMost = "light"
+minConfidence = 0.5
+
+[[rules]]
+id = "heavy"
+type = "preference"
+prefer = ["public-heavy"]
+
+[[rules.when]]
+criterion = "weight"
+atLeast = "heavy"
+minConfidence = 0.5
