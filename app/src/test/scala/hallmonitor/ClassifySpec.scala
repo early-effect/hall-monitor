@@ -13,7 +13,14 @@ object ClassifySpec extends ZIOSpecDefault:
 
   private val policy = Policy(
     backends = List(
-      Backend(BackendId("public-fast"), ModelKind.Conversational, "http://up", "grok", Secret("k"), Nil)
+      Backend(
+        BackendId("public-fast"),
+        ModelKind.Conversational,
+        "http://up",
+        "grok",
+        BackendAuth.Key(Secret("k")),
+        Nil,
+      )
     ),
     criteria = List(
       Criterion.Noul(CriterionId("pii"), "pii?", "yes", "no", ModelKind.both),

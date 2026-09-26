@@ -2,6 +2,7 @@ package hallmonitor
 
 import hallmonitor.config.Load
 import hallmonitor.domain.Loaded
+import hallmonitor.forward.TokenCache
 import hallmonitor.http.{Api, Gate}
 import heddle.client.Client
 import heddle.{BytesLength, Server}
@@ -28,8 +29,9 @@ object Main extends ZIOAppDefault:
       client    <- ZIO.service[Client].provide(ZLayer.succeed(clientConfig(loaded)) >>> Client.layer)
       transport <- ZIO.service[hexis.Transport].provide(ZLayer.succeed(bootstrap) >>> hexis.Transport.live)
       reload = System.envs.orDie.flatMap(next => Load.fromFile(path, next.get))
-      _ <- ZIO.logInfo(s"hall-monitor listening on ${loaded.listen.host}:${loaded.listen.port} (Ctrl-C to stop)")
-      _ <- Server.serve(Api.routes(Gate(current, transport, client, reload)), serverConfig(loaded))
+      tokens <- TokenCache.make(client)
+      _      <- ZIO.logInfo(s"hall-monitor listening on ${loaded.listen.host}:${loaded.listen.port} (Ctrl-C to stop)")
+      _      <- Server.serve(Api.routes(Gate(current, transport, client, tokens, reload)), serverConfig(loaded))
     yield ()
 
   /** Ctrl-C and `kill` both stop the process. sbt treats a raw SIGINT status of 130 as a crash, so exit 0. */

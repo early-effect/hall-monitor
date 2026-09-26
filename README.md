@@ -59,7 +59,7 @@ Constraints intersect. A PII rule that allows only `local-strong` and `jev-vpc` 
 
 `stream: true` is returned as the upstream event stream, after the upstream body has been buffered. Time to first token is the full completion.
 
-See `examples/hall-monitor.toml`.
+See `examples/hall-monitor.toml`. Grok Build models there use `auth = "grok"` and `protocol = "responses"` (the dsh grok-build adapter). Bedrock Grok uses `auth = "command"` against the OpenAI-compatible Bedrock URL, and Bedrock Opus uses `protocol = "messages"` with `[backends.headers]`. The bearer command is `dsh-bedrock-token --json`, the same helper Grok Build's `bedrock-sso` provider runs.
 
 ## Release
 

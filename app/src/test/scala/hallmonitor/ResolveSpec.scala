@@ -167,7 +167,7 @@ object ResolveSpec extends ZIOSpecDefault:
     Resolve(policy, face, answers, requested, truncated).map(_.id.value)
 
   private def backend(id: String, kind: ModelKind, aliases: List[String] = Nil): Backend =
-    Backend(BackendId(id), kind, s"http://$id", id, Secret("secret"), aliases)
+    Backend(BackendId(id), kind, s"http://$id", id, BackendAuth.Key(Secret("secret")), aliases)
 
   private val pii    = Criterion.Noul(CriterionId("pii"), "pii", "yes", "no", ModelKind.both)
   private val weight =

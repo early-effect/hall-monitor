@@ -74,6 +74,62 @@ The bare `cs install hall-monitor`, with no `--channel`, is a pull request to
 usual place. Until that pull request is merged, pass the channel.
 """
     ),
+    section("Grok Build and Bedrock")(
+      md"""
+Two upstreams are already wired the way the harnesses at home call them.
+
+Grok Build models use the `grok login` session and the Responses API, which is
+what dsh's grok-build adapter posts to `https://api.x.ai/v1/responses`:
+
+```toml
+[[backends]]
+id = "grok-4.7"
+kind = "conversational"
+baseUrl = "https://api.x.ai/v1"
+upstreamModel = "grok-4.7"
+auth = "grok"
+protocol = "responses"
+```
+
+Bedrock uses the same helper as Grok Build's `auth_provider.bedrock-sso`.
+Grok on Bedrock is chat completions. Opus on Bedrock is Anthropic messages,
+with the version header on that backend:
+
+```toml
+[[backends]]
+id = "grok-4.6-bedrock"
+kind = "conversational"
+baseUrl = "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1"
+upstreamModel = "us.xai.grok-4.6"
+auth = "command"
+authCommand = "~/.dsh/bin/dsh-bedrock-token"
+authArgs = ["--json"]
+authTimeoutSeconds = 300
+developerRole = false
+maxTokensField = "max_tokens"
+
+[[backends]]
+id = "opus-5.5-bedrock"
+kind = "conversational"
+baseUrl = "https://bedrock-runtime.us-west-2.amazonaws.com/anthropic/v1"
+upstreamModel = "us.anthropic.claude-opus-5-5"
+protocol = "messages"
+auth = "command"
+authCommand = "~/.dsh/bin/dsh-bedrock-token"
+authArgs = ["--json"]
+authTimeoutSeconds = 300
+
+[backends.headers]
+anthropic-version = "2023-06-01"
+```
+
+`[backends.headers]` belongs to the backend directly above it. The command
+prints `{"access_token","expires_in"}` on stdout. Hall Monitor caches that
+bearer and sends it as `Authorization`. A harness still speaks chat
+completions. The monitor translates when the upstream speaks Responses or
+Anthropic messages.
+"""
+    ),
     section("From a checkout")(
       md"""
 Working on this repository does not need Central:

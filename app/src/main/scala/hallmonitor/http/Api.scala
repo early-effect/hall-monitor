@@ -14,6 +14,7 @@ final case class Gate(
     current: Ref[Loaded],
     transport: hexis.Transport,
     client: Client,
+    tokens: hallmonitor.forward.TokenCache,
     reload: IO[LoadError, Loaded],
 )
 
@@ -84,7 +85,7 @@ object Api:
                             complete(wire, face, failure, Some(reading), loaded, start, id, reading.truncated, None)
                           case Right(backend) =>
                             Forward
-                              .send(gate.client, backend, incoming.body)
+                              .send(gate.client, gate.tokens, backend, incoming.body)
                               .foldZIO(
                                 failure =>
                                   complete(

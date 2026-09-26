@@ -40,6 +40,53 @@ baseUrl = "http://127.0.0.1:11434/v1"
 upstreamModel = "qwen-strong"
 apiKey = "ollama"
 
+# Grok Build session from `grok login`. Same Responses call dsh's grok-build adapter makes.
+[[backends]]
+id = "grok-4.7"
+kind = "conversational"
+baseUrl = "https://api.x.ai/v1"
+upstreamModel = "grok-4.7"
+auth = "grok"
+protocol = "responses"
+aliases = ["grok-build"]
+
+[[backends]]
+id = "grok-4.6"
+kind = "conversational"
+baseUrl = "https://api.x.ai/v1"
+upstreamModel = "grok-4.6"
+auth = "grok"
+protocol = "responses"
+
+# Bedrock, the same helper Grok Build's auth_provider.bedrock-sso runs.
+[[backends]]
+id = "grok-4.6-bedrock"
+kind = "conversational"
+baseUrl = "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1"
+upstreamModel = "us.xai.grok-4.6"
+auth = "command"
+authCommand = "~/.dsh/bin/dsh-bedrock-token"
+authArgs = ["--json"]
+authTimeoutSeconds = 300
+developerRole = false
+maxTokensField = "max_tokens"
+aliases = ["bedrock-grok"]
+
+[[backends]]
+id = "opus-5.5-bedrock"
+kind = "conversational"
+baseUrl = "https://bedrock-runtime.us-west-2.amazonaws.com/anthropic/v1"
+upstreamModel = "us.anthropic.claude-opus-5-5"
+protocol = "messages"
+auth = "command"
+authCommand = "~/.dsh/bin/dsh-bedrock-token"
+authArgs = ["--json"]
+authTimeoutSeconds = 300
+aliases = ["bedrock-opus"]
+
+[backends.headers]
+anthropic-version = "2023-06-01"
+
 [[backends]]
 id = "jev-public"
 kind = "decision"

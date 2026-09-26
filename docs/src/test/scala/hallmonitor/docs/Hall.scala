@@ -63,5 +63,5 @@ object Hall:
     Resolve(rules, face, answers, requested, truncated).map(_.id.value)
 
   def model(id: String, kind: ModelKind, aliases: List[String] = Nil): Backend =
-    Backend(BackendId(id), kind, s"http://$id", id, Secret("secret"), aliases)
+    Backend(BackendId(id), kind, s"http://$id", id, BackendAuth.Key(Secret("secret")), aliases)
 end Hall
