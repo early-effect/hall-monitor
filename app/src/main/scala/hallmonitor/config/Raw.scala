@@ -25,10 +25,8 @@ final case class BackendRaw(
     protocol: Option[String],
     auth: Option[String],
     grokHome: Option[String],
-    authCommand: Option[String],
-    authArgs: Option[List[String]],
-    authTtlSeconds: Option[Int],
-    authTimeoutSeconds: Option[Int],
+    profile: Option[String],
+    region: Option[String],
     developerRole: Option[Boolean],
     maxTokensField: Option[String],
     headers: Option[Map[String, String]],
@@ -135,35 +133,14 @@ object AppRaw:
       .pipe(Config.string("grokHome").optional)((acc, grokHome) =>
         (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, acc._8, grokHome)
       )
-      .pipe(Config.string("authCommand").optional)((acc, authCommand) =>
-        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, acc._8, acc._9, authCommand)
+      .pipe(Config.string("profile").optional)((acc, profile) =>
+        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, acc._8, acc._9, profile)
       )
-      .pipe(Config.listOf("authArgs", Config.string).optional)((acc, authArgs) =>
-        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, acc._8, acc._9, acc._10, authArgs)
-      )
-      .pipe(Config.int("authTtlSeconds").optional)((acc, ttl) =>
-        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, acc._8, acc._9, acc._10, acc._11, ttl)
-      )
-      .pipe(Config.int("authTimeoutSeconds").optional)((acc, timeout) =>
-        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, acc._8, acc._9, acc._10, acc._11, acc._12, timeout)
+      .pipe(Config.string("region").optional)((acc, region) =>
+        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, acc._8, acc._9, acc._10, region)
       )
       .pipe(Config.boolean("developerRole").optional)((acc, developerRole) =>
-        (
-          acc._1,
-          acc._2,
-          acc._3,
-          acc._4,
-          acc._5,
-          acc._6,
-          acc._7,
-          acc._8,
-          acc._9,
-          acc._10,
-          acc._11,
-          acc._12,
-          acc._13,
-          developerRole,
-        )
+        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, acc._8, acc._9, acc._10, acc._11, developerRole)
       )
       .pipe(Config.string("maxTokensField").optional)((acc, maxTokensField) =>
         (
@@ -179,8 +156,6 @@ object AppRaw:
           acc._10,
           acc._11,
           acc._12,
-          acc._13,
-          acc._14,
           maxTokensField,
         )
       )
@@ -195,10 +170,8 @@ object AppRaw:
           protocol,
           auth,
           grokHome,
-          authCommand,
-          authArgs,
-          ttl,
-          timeout,
+          profile,
+          region,
           developerRole,
           maxTokensField,
         ) = acc
@@ -213,10 +186,8 @@ object AppRaw:
           protocol,
           auth,
           grokHome,
-          authCommand,
-          authArgs,
-          ttl,
-          timeout,
+          profile,
+          region,
           developerRole,
           maxTokensField,
           headers.filter(_.nonEmpty),

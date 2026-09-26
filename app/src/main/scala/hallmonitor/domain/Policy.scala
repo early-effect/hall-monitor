@@ -18,7 +18,7 @@ object ModelKind:
 enum BackendAuth:
   case Key(secret: Secret)
   case Grok(home: String)
-  case Command(program: String, args: List[String], ttlSeconds: Int, timeoutSeconds: Int)
+  case Bedrock(profile: String, region: String)
 
 final case class ChatCompat(rewriteDeveloper: Boolean = false, maxTokensField: Option[String] = None)
 

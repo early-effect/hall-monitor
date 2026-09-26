@@ -12,16 +12,15 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 import java.time.Instant
-import scala.jdk.CollectionConverters.*
 
 final class TokenCache(tokens: Ref[Map[String, Minted]], discovery: Ref[Option[String]], client: Client):
   def bearer(backend: Backend): IO[RouteError, String] =
     backend.auth match
       case BackendAuth.Key(secret)      => ZIO.succeed(secret.reveal)
       case grok: BackendAuth.Grok       => GrokSession.token(grok.home, client, discovery)
-      case command: BackendAuth.Command =>
-        cached(command.program + " " + command.args.mkString(" "), command.ttlSeconds)(
-          CommandAuth.run(command)
+      case bedrock: BackendAuth.Bedrock =>
+        cached(s"bedrock ${bedrock.profile} ${bedrock.region}", 12 * 60 * 60 - 60)(
+          BedrockSession.bearer(bedrock.profile, bedrock.region, client).map(token => Minted(token, 0L))
         )
 
   private def cached(key: String, ttlSeconds: Int)(mint: IO[RouteError, Minted]): IO[RouteError, String] =
@@ -49,46 +48,7 @@ object TokenCache:
 
 final case class Minted(token: String, expiresAtMs: Long)
 
-object CommandAuth:
-  def parse(stdout: String): Either[String, Minted] =
-    val line = stdout.trim.split('\n').lastOption.map(_.trim).getOrElse("")
-    line.fromJson[Json.Obj] match
-      case Left(_)    => Left("auth command returned no access_token")
-      case Right(obj) =>
-        obj.get("access_token") match
-          case Some(Json.Str(token)) if token.nonEmpty =>
-            val expires = obj
-              .get("expires_in")
-              .collect { case Json.Num(value) =>
-                java.lang.System.currentTimeMillis() + value.longValue * 1000L
-              }
-              .getOrElse(0L)
-            Right(Minted(token, expires))
-          case _ => Left("auth command returned no access_token")
-    end match
-  end parse
-
-  def run(command: BackendAuth.Command): IO[RouteError, Minted] =
-    ZIO
-      .attemptBlockingInterrupt {
-        val program = expandHome(command.program)
-        val process = new ProcessBuilder((program :: command.args).asJava).start()
-        val stdout  = new String(process.getInputStream.readAllBytes(), StandardCharsets.UTF_8)
-        val code    = process.waitFor()
-        (code, stdout)
-      }
-      .timeoutFail(RouteError.Upstream(502, "auth command timed out"))(
-        zio.Duration.fromSeconds(command.timeoutSeconds.toLong)
-      )
-      .mapError {
-        case failure: RouteError => failure
-        case _                   => RouteError.Upstream(502, "auth command failed")
-      }
-      .flatMap { (code, stdout) =>
-        if code != 0 then ZIO.fail(RouteError.Upstream(502, s"auth command exited $code"))
-        else ZIO.fromEither(parse(stdout)).mapError(message => RouteError.Upstream(502, message))
-      }
-
+object Home:
   def form(fields: (String, String)*): String =
     fields
       .map((key, value) =>
@@ -101,14 +61,14 @@ object CommandAuth:
     if path == "~" then home
     else if path.startsWith("~/") then home + path.drop(1)
     else path
-end CommandAuth
+end Home
 
 object GrokSession:
   private val PreemptMs = 120_000L
   private val ClientId  = "b1a00492-073a-47ea-816f-4c329264a828"
 
   def token(home: String, client: Client, discovery: Ref[Option[String]]): IO[RouteError, String] =
-    val path = Path.of(CommandAuth.expandHome(home), "auth.json")
+    val path = Path.of(Home.expandHome(home), "auth.json")
     ZIO.clock.flatMap { clock =>
       clock.currentTime(java.util.concurrent.TimeUnit.MILLISECONDS).flatMap { now =>
         read(path).flatMap { session =>
@@ -169,7 +129,7 @@ object GrokSession:
 
   private def refresh(session: Session, client: Client, discovery: Ref[Option[String]]): IO[RouteError, Session] =
     endpoint(session.issuer, client, discovery).flatMap { tokenEndpoint =>
-      val body = CommandAuth.form(
+      val body = Home.form(
         "grant_type"    -> "refresh_token",
         "client_id"     -> session.clientId,
         "refresh_token" -> session.refresh,

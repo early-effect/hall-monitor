@@ -34,12 +34,9 @@ object LoadSpec extends ZIOSpecDefault:
         loaded.policy.backends
           .find(_.id.value == "grok-4.7")
           .exists(_.auth == hallmonitor.domain.BackendAuth.Grok("~/.grok")),
-        loaded.policy.backends.find(_.id.value == "grok-4.6-bedrock").exists { case backend =>
-          backend.auth match
-            case hallmonitor.domain.BackendAuth.Command(program, args, _, timeout) =>
-              program == "~/.dsh/bin/dsh-bedrock-token" && args == List("--json") && timeout == 300
-            case _ => false
-        },
+        loaded.policy.backends
+          .find(_.id.value == "grok-4.6-bedrock")
+          .exists(_.auth == hallmonitor.domain.BackendAuth.Bedrock("us-dev", "us-west-2")),
         loaded.policy.backends.find(_.id.value == "opus-5.5-bedrock").exists { case backend =>
           backend.wire match
             case hallmonitor.domain.UpstreamWire.Messages(headers) =>

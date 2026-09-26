@@ -1,7 +1,7 @@
 package hallmonitor
 
 import hallmonitor.domain.ChatCompat
-import hallmonitor.forward.{CommandAuth, Shape}
+import hallmonitor.forward.{BedrockBearer, Shape}
 import zio.json.*
 import zio.json.ast.Json
 import zio.test.*
@@ -64,9 +64,18 @@ object WireSpec extends ZIOSpecDefault:
         out.get("model").contains(Json.Str("us.anthropic.claude-opus-5-5")),
       )
     },
-    test("an auth command's json is a bearer and an expiry") {
-      val parsed = CommandAuth.parse("""{"access_token":"bedrock-token","expires_in":3600}""")
-      assertTrue(parsed.map(_.token).contains("bedrock-token"), parsed.exists(_.expiresAtMs > 0L))
+    test("a Bedrock bearer matches the SigV4 token the AWS generator builds") {
+      val token = BedrockBearer.token(
+        "AKIDEXAMPLE",
+        "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+        "AQoEXAMPLE",
+        "us-west-2",
+        43200,
+        "20240102T030405Z",
+      )
+      assertTrue(
+        token == "bedrock-api-key-YmVkcm9jay5hbWF6b25hd3MuY29tLz9BY3Rpb249Q2FsbFdpdGhCZWFyZXJUb2tlbiZYLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSURFWEFNUExFJTJGMjAyNDAxMDIlMkZ1cy13ZXN0LTIlMkZiZWRyb2NrJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNDAxMDJUMDMwNDA1WiZYLUFtei1FeHBpcmVzPTQzMjAwJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCZYLUFtei1TZWN1cml0eS1Ub2tlbj1BUW9FWEFNUExFJlgtQW16LVNpZ25hdHVyZT0wMzJkZDQ1MDJiNjZmMzZkNDBkOTEyMmQ0MGM2OTFiZTM4MWNkNTMyZmFkNDYyNjA5ODk1MDYwOTg5YmIyYjhkJlZlcnNpb249MQ=="
+      )
     },
   )
 end WireSpec

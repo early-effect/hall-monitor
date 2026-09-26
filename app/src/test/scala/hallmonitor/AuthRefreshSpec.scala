@@ -1,14 +1,13 @@
 package hallmonitor
 
 import hallmonitor.domain.*
-import hallmonitor.forward.{GrokSession, TokenCache}
+import hallmonitor.forward.{BedrockSession, GrokSession}
 import heddle.*
 import heddle.client.Client
 import zio.test.*
-import zio.{durationInt, Chunk, Ref, ZIO}
+import zio.{Chunk, Ref, ZIO}
 
 import java.nio.file.{Files, Path}
-import java.nio.file.attribute.PosixFilePermission
 import scala.jdk.CollectionConverters.*
 
 object AuthRefreshSpec extends ZIOSpecDefault:
@@ -41,42 +40,50 @@ object AuthRefreshSpec extends ZIOSpecDefault:
           yield assertTrue(token == "fresh", saved.contains("fresh"), saved.contains("rt2"))
         }
     },
-    test("a command bearer is reused until it is inside a minute of expiry") {
+    test("an expired AWS SSO token is refreshed and used to mint a Bedrock bearer") {
+      val routes = Routes(
+        Method.POST / "token" -> Handler.fromFunctionZIO(_ =>
+          ZIO.succeed(Response.json("""{"accessToken":"sso-fresh","expiresIn":28800,"refreshToken":"rt2"}"""))
+        ),
+        Method.GET / "federation" / "credentials" -> Handler.fromFunctionZIO(_ =>
+          ZIO.succeed(
+            Response.json(
+              """{"roleCredentials":{"accessKeyId":"AKIDEXAMPLE","secretAccessKey":"wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY","sessionToken":"AQoEXAMPLE","expiration":1}}"""
+            )
+          )
+        ),
+      )
       ZIO
-        .acquireRelease(ZIO.attempt(Files.createTempDirectory("auth-cmd")))(dir => ZIO.attempt(delete(dir)).ignore)
+        .acquireRelease(ZIO.attempt(Files.createTempDirectory("aws-sso")))(dir => ZIO.attempt(delete(dir)).ignore)
         .flatMap { dir =>
-          val log    = dir.resolve("hits")
-          val script = dir.resolve("mint.sh")
+          val cache = dir.resolve("sso").resolve("cache")
+          Files.createDirectories(cache)
           Files.writeString(
-            script,
-            """#!/bin/sh
-              |printf x >> "$1"
-              |n=$(wc -c < "$1" | tr -d ' ')
-              |printf '{"access_token":"tok-%s"}\n' "$n"
+            dir.resolve("config"),
+            """[profile us-dev]
+              |sso_session = us
+              |sso_account_id = 111122223333
+              |sso_role_name = Bedrock
+              |[sso-session us]
+              |sso_start_url = https://example.awsapps.com/start
+              |sso_region = us-west-2
               |""".stripMargin,
           )
-          Files.setPosixFilePermissions(
-            script,
-            java.util.Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_EXECUTE),
+          val name = java.security.MessageDigest
+            .getInstance("SHA-1")
+            .digest("us".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            .map("%02x".format(_))
+            .mkString
+          Files.writeString(
+            cache.resolve(name + ".json"),
+            """{"accessToken":"old","expiresAt":"1970-01-01T00:00:00Z","refreshToken":"rt","clientId":"cid","clientSecret":"sec","region":"us-west-2","startUrl":"https://example.awsapps.com/start"}""",
           )
-          val backend = Backend(
-            BackendId("bedrock"),
-            ModelKind.Conversational,
-            "https://bedrock.example/openai/v1",
-            "us.xai.grok-4.6",
-            BackendAuth.Command(script.toString, List(log.toString), ttlSeconds = 3600, timeoutSeconds = 30),
-            Nil,
-          )
-          val idle = new Client:
-            def batched(request: heddle.http.Request): zio.Task[Response] =
-              ZIO.dieMessage("command auth does not use the http client")
           for
-            cache  <- TokenCache.make(idle)
-            first  <- cache.bearer(backend)
-            second <- cache.bearer(backend)
-            _      <- TestClock.adjust(3601.seconds)
-            third  <- cache.bearer(backend)
-          yield assertTrue(first == "tok-1", second == "tok-1", third == "tok-2")
+            token <- ZIO
+              .serviceWithZIO[Client](client => BedrockSession.bearer("us-dev", "us-west-2", client, dir))
+              .provide(Client.inMemory(routes))
+            saved = Files.readString(cache.resolve(name + ".json"))
+          yield assertTrue(token.startsWith("bedrock-api-key-"), saved.contains("sso-fresh"), saved.contains("rt2"))
         }
     },
   )

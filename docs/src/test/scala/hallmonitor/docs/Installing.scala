@@ -91,9 +91,11 @@ auth = "grok"
 protocol = "responses"
 ```
 
-Bedrock uses the same helper as Grok Build's `auth_provider.bedrock-sso`.
-Grok on Bedrock is chat completions. Opus on Bedrock is Anthropic messages,
-with the version header on that backend:
+Bedrock does not shell out. Hall Monitor reads the AWS SSO profile, refreshes
+the SSO token when it is near expiry, asks for role credentials, and SigV4-signs
+the same bearer Grok Build sends. Grok on Bedrock is chat completions. Opus on
+Bedrock is Anthropic messages, with the version header on that backend. If the
+SSO login itself is dead, the error says to run `aws sso login`.
 
 ```toml
 [[backends]]
@@ -101,10 +103,9 @@ id = "grok-4.6-bedrock"
 kind = "conversational"
 baseUrl = "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1"
 upstreamModel = "us.xai.grok-4.6"
-auth = "command"
-authCommand = "~/.dsh/bin/dsh-bedrock-token"
-authArgs = ["--json"]
-authTimeoutSeconds = 300
+auth = "bedrock"
+profile = "us-dev"
+region = "us-west-2"
 developerRole = false
 maxTokensField = "max_tokens"
 
@@ -114,20 +115,17 @@ kind = "conversational"
 baseUrl = "https://bedrock-runtime.us-west-2.amazonaws.com/anthropic/v1"
 upstreamModel = "us.anthropic.claude-opus-5-5"
 protocol = "messages"
-auth = "command"
-authCommand = "~/.dsh/bin/dsh-bedrock-token"
-authArgs = ["--json"]
-authTimeoutSeconds = 300
+auth = "bedrock"
+profile = "us-dev"
+region = "us-west-2"
 
 [backends.headers]
 anthropic-version = "2023-06-01"
 ```
 
-`[backends.headers]` belongs to the backend directly above it. The command
-prints `{"access_token","expires_in"}` on stdout. Hall Monitor caches that
-bearer and sends it as `Authorization`. A harness still speaks chat
-completions. The monitor translates when the upstream speaks Responses or
-Anthropic messages.
+`[backends.headers]` belongs to the backend directly above it. The bearer is
+cached for twelve hours. A harness still speaks chat completions. The monitor
+translates when the upstream speaks Responses or Anthropic messages.
 """
     ),
     section("From a checkout")(

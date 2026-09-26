@@ -34,7 +34,6 @@ enum ConfigError:
   case BadAuth(owner: String, value: String)
   case BadProtocol(owner: String, value: String)
   case AuthExtra(owner: String)
-  case AuthCommandMissing(owner: String)
   case BadMaxTokensField(owner: String, value: String)
 
   def message: String =
@@ -74,6 +73,5 @@ enum ConfigError:
       case BadAuth(owner, value)           => s"$owner auth $value is not recognised"
       case BadProtocol(owner, value)       => s"$owner protocol $value is not recognised"
       case AuthExtra(owner)                => s"$owner auth does not take apiKey or apiKeyEnv"
-      case AuthCommandMissing(owner)       => s"$owner auth command is empty"
       case BadMaxTokensField(owner, value) => s"$owner maxTokensField $value is not recognised"
 end ConfigError

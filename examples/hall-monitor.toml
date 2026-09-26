@@ -58,16 +58,15 @@ upstreamModel = "grok-4.6"
 auth = "grok"
 protocol = "responses"
 
-# Bedrock, the same helper Grok Build's auth_provider.bedrock-sso runs.
+# Bedrock. Hall Monitor reads the AWS SSO profile and mints the bearer itself.
 [[backends]]
 id = "grok-4.6-bedrock"
 kind = "conversational"
 baseUrl = "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1"
 upstreamModel = "us.xai.grok-4.6"
-auth = "command"
-authCommand = "~/.dsh/bin/dsh-bedrock-token"
-authArgs = ["--json"]
-authTimeoutSeconds = 300
+auth = "bedrock"
+profile = "us-dev"
+region = "us-west-2"
 developerRole = false
 maxTokensField = "max_tokens"
 aliases = ["bedrock-grok"]
@@ -78,10 +77,9 @@ kind = "conversational"
 baseUrl = "https://bedrock-runtime.us-west-2.amazonaws.com/anthropic/v1"
 upstreamModel = "us.anthropic.claude-opus-5-5"
 protocol = "messages"
-auth = "command"
-authCommand = "~/.dsh/bin/dsh-bedrock-token"
-authArgs = ["--json"]
-authTimeoutSeconds = 300
+auth = "bedrock"
+profile = "us-dev"
+region = "us-west-2"
 aliases = ["bedrock-opus"]
 
 [backends.headers]

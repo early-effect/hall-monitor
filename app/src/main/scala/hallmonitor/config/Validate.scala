@@ -113,16 +113,11 @@ object Validate:
       case "grok" =>
         if hasKey then found += ConfigError.AuthExtra(owner)
         Some(BackendAuth.Grok(raw.grokHome.map(_.trim).filter(_.nonEmpty).getOrElse("~/.grok")))
-      case "command" =>
+      case "bedrock" =>
         if hasKey then found += ConfigError.AuthExtra(owner)
-        val program = raw.authCommand.map(_.trim).filter(_.nonEmpty)
-        if program.isEmpty then found += ConfigError.AuthCommandMissing(owner)
-        val ttl     = raw.authTtlSeconds.getOrElse(3600)
-        val timeout = raw.authTimeoutSeconds.getOrElse(30)
-        if ttl <= 0 || timeout <= 0 then found += ConfigError.BadLimit("authTtlSeconds")
-        program.map(path =>
-          BackendAuth.Command(path, raw.authArgs.getOrElse(Nil).map(_.trim).filter(_.nonEmpty), ttl, timeout)
-        )
+        val profile = raw.profile.map(_.trim).filter(_.nonEmpty).getOrElse("us-dev")
+        val region  = raw.region.map(_.trim).filter(_.nonEmpty).getOrElse("us-west-2")
+        Some(BackendAuth.Bedrock(profile, region))
       case other =>
         found += ConfigError.BadAuth(owner, other)
         None
