@@ -24,7 +24,8 @@ object AuthRefreshSpec extends ZIOSpecDefault:
             ZIO.succeed(Response.json("""{"access_token":"fresh","refresh_token":"rt2","expires_in":4000}"""))
           ),
       )
-      ZIO.acquireRelease(ZIO.attempt(Files.createTempDirectory("grok-auth")))(dir => ZIO.attempt(delete(dir)).ignore)
+      ZIO
+        .acquireRelease(ZIO.attempt(Files.createTempDirectory("grok-auth")))(dir => ZIO.attempt(delete(dir)).ignore)
         .flatMap { dir =>
           val auth = dir.resolve("auth.json")
           Files.writeString(
@@ -41,7 +42,8 @@ object AuthRefreshSpec extends ZIOSpecDefault:
         }
     },
     test("a command bearer is reused until it is inside a minute of expiry") {
-      ZIO.acquireRelease(ZIO.attempt(Files.createTempDirectory("auth-cmd")))(dir => ZIO.attempt(delete(dir)).ignore)
+      ZIO
+        .acquireRelease(ZIO.attempt(Files.createTempDirectory("auth-cmd")))(dir => ZIO.attempt(delete(dir)).ignore)
         .flatMap { dir =>
           val log    = dir.resolve("hits")
           val script = dir.resolve("mint.sh")
