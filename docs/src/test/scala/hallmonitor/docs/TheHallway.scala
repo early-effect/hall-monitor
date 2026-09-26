@@ -24,8 +24,11 @@ this is. The one you invent on a Thursday. A System One model answers them.
 Your rules decide what those answers are allowed to do.
 
 ```bash
-sbt "app/run examples/hall-monitor.toml"
+cs launch rocks.earlyeffect::hall-monitor:0.1.0 -- hall-monitor.toml
 ```
+
+The install page is the rest of that: a launcher you keep, the coursier
+channel name, and how Ctrl-C and `kill` stop the process.
 
 Point a chat harness at `http://127.0.0.1:8080/v1` with the model `hall-monitor`,
 or point hexis at `http://127.0.0.1:8080/jev`. The key on the clipboard is yours.

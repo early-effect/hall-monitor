@@ -7,8 +7,7 @@ ThisBuild / organizationName     := "Early Effect"
 ThisBuild / organizationHomepage := Some(uri("https://www.earlyeffect.rocks"))
 ThisBuild / homepage             := Some(uri("https://github.com/early-effect/hall-monitor"))
 ThisBuild / licenses             := List("Apache-2.0" -> uri("https://www.apache.org/licenses/LICENSE-2.0.txt"))
-ThisBuild / version              := "0.1.0"
-ThisBuild / versionScheme        := Some("early-semver")
+ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / scmInfo              := Some(
   ScmInfo(
     uri("https://github.com/early-effect/hall-monitor"),
@@ -28,11 +27,22 @@ lazy val app = project
   .in(file("app"))
   .settings(MyVersions.appLib, MyVersions.appTest)
   .settings(
-    name        := "hall-monitor",
-    description := "A hallway monitor for model calls. Jev reads the note, your rules open the door, and the harness sees an ordinary provider.",
+    name                 := "hall-monitor",
+    description          := "A hallway monitor for model calls. Jev reads the note, your rules open the door, and the harness sees an ordinary provider.",
+    Compile / mainClass  := Some("hallmonitor.Main"),
+    Compile / run / fork := true,
     scalacOptions ++= Seq("-deprecation", "-feature", "-Wunused:all"),
-    zipxPublish := Some(false),
     testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework"),
+    publishMavenStyle    := true,
+    pomIncludeRepository := { _ => false },
+    publishTo := {
+      val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
+      if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
+      else localStaging.value
+    },
+    // CI-only signing. PGP_KEY_HEX is the org secret in the generated release job.
+    // MISSING_KEY_HEX keeps a local load working and makes a laptop publish fail loudly.
+    usePgpKeyHex(sys.env.getOrElse("PGP_KEY_HEX", "MISSING_KEY_HEX")),
   )
 
 lazy val docs = project
@@ -66,9 +76,10 @@ lazy val root = project
     zipxPublish          := Some(false),
     zipxJavaVersion      := JdkVersion("25"),
     zipxWorkflowDispatch := true,
-    zipxCapabilities += ZipxDocs
-      .pages()
-      .andCondition(JobCondition.repositoryIs("early-effect/hall-monitor")),
+    zipxCapabilities ++= Seq(
+      ZipxCentral.release.withCondition(JobCondition.repositoryIs("early-effect/hall-monitor")),
+      ZipxDocs.pages().andCondition(JobCondition.repositoryIs("early-effect/hall-monitor")),
+    ),
   )
 
 addCommandAlias("docsPreview", "~docs/specularPreview")

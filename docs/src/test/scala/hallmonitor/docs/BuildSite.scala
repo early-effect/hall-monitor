@@ -10,6 +10,7 @@ object BuildSite extends DocsSite:
   def pages =
     Vector(
       TheHallway.doc,
+      Installing.doc,
       TwoDoors.doc,
       TheNote.doc,
       TheQuestions.doc,
@@ -36,8 +37,13 @@ and the model behind it does the talking.
       ),
       installSnippets = Vector(
         CodeSnippet(
-          "Run",
-          """sbt "app/run examples/hall-monitor.toml"""",
+          "Launch",
+          "cs launch rocks.earlyeffect::hall-monitor:0.1.0 -- hall-monitor.toml",
+        ),
+        CodeSnippet(
+          "Launcher",
+          """cs bootstrap rocks.earlyeffect::hall-monitor:0.1.0 -o hall-monitor -f
+            |./hall-monitor hall-monitor.toml""".stripMargin,
         ),
         CodeSnippet(
           "Harness",

@@ -1,0 +1,7 @@
+{
+  "hall-monitor": {
+    "repositories": ["central"],
+    "dependencies": ["rocks.earlyeffect::hall-monitor:latest.release"],
+    "mainClass": "hallmonitor.Main"
+  }
+}

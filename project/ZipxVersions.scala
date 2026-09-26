@@ -23,6 +23,7 @@ object MyVersions extends ZipxVersions:
   val specularTheme   = specular.mod("early-effect-docs-theme").test
 
   val scalafmt       = Plugin("org.scalameta", "sbt-scalafmt", "2.6.2")
+  val dynver         = Plugin("com.github.sbt", "sbt-dynver", "5.1.1")
   val specularPlugin = Plugin("rocks.earlyeffect", "sbt-specular", "0.17.0")
 
   def appLib   = library(zio, zioStreams, zioJson, zioConfig, zioConfigToml, heddle, hexis)
