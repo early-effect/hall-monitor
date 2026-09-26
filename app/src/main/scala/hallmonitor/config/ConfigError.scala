@@ -31,6 +31,10 @@ enum ConfigError:
   case ContradictoryFaces(rule: String)
   case AliasClash(alias: String)
   case DuplicateLevel(id: String, level: String)
+  case BadAuth(owner: String, value: String)
+  case BadProtocol(owner: String, value: String)
+  case AuthExtra(owner: String)
+  case BadMaxTokensField(owner: String, value: String)
 
   def message: String =
     this match
@@ -53,17 +57,21 @@ enum ConfigError:
       case CriteriaWithoutClassifier           => "criteria require a classifier"
       case PredicateOperators(rule, criterion) =>
         s"$rule predicate $criterion must set exactly one of yesAtLeast, choice, atLeast, atMost"
-      case PredicateLevel(rule, level)   => s"$rule level $level is not on the score criterion"
-      case PredicateChoice(rule, option) => s"$rule choice $option is not on the criterion"
-      case ForeignField(id, field)       => s"criterion $id cannot set $field"
-      case EmptyId(owner)                => s"$owner id is empty"
-      case BadKind(owner, value)         => s"$owner kind $value is not recognised"
-      case BadFace(owner, value)         => s"$owner face $value is not recognised"
-      case BadTimeout                    => "classifier timeoutSeconds must be positive"
-      case BadLimit(field)               => s"$field must be positive"
-      case EmptyBaseUrl(owner)           => s"$owner baseUrl is empty"
-      case EmptyModel(owner)             => s"$owner model is empty"
-      case ContradictoryFaces(rule)      => s"$rule criteria have no face in common"
-      case AliasClash(alias)             => s"alias $alias collides with another name"
-      case DuplicateLevel(id, level)     => s"criterion $id repeats level $level"
+      case PredicateLevel(rule, level)     => s"$rule level $level is not on the score criterion"
+      case PredicateChoice(rule, option)   => s"$rule choice $option is not on the criterion"
+      case ForeignField(id, field)         => s"criterion $id cannot set $field"
+      case EmptyId(owner)                  => s"$owner id is empty"
+      case BadKind(owner, value)           => s"$owner kind $value is not recognised"
+      case BadFace(owner, value)           => s"$owner face $value is not recognised"
+      case BadTimeout                      => "classifier timeoutSeconds must be positive"
+      case BadLimit(field)                 => s"$field must be positive"
+      case EmptyBaseUrl(owner)             => s"$owner baseUrl is empty"
+      case EmptyModel(owner)               => s"$owner model is empty"
+      case ContradictoryFaces(rule)        => s"$rule criteria have no face in common"
+      case AliasClash(alias)               => s"alias $alias collides with another name"
+      case DuplicateLevel(id, level)       => s"criterion $id repeats level $level"
+      case BadAuth(owner, value)           => s"$owner auth $value is not recognised"
+      case BadProtocol(owner, value)       => s"$owner protocol $value is not recognised"
+      case AuthExtra(owner)                => s"$owner auth does not take apiKey or apiKeyEnv"
+      case BadMaxTokensField(owner, value) => s"$owner maxTokensField $value is not recognised"
 end ConfigError

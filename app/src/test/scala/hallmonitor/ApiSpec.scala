@@ -2,6 +2,7 @@ package hallmonitor
 
 import hallmonitor.config.{Load, LoadError}
 import hallmonitor.domain.*
+import hallmonitor.forward.TokenCache
 import hallmonitor.http.{Api, Gate}
 import heddle.*
 import heddle.client.Client
@@ -19,7 +20,7 @@ object ApiSpec extends ZIOSpecDefault:
     ModelKind.Conversational,
     "https://up.test/v1",
     "grok-4-fast",
-    Secret("fast-key"),
+    BackendAuth.Key(Secret("fast-key")),
     Nil,
   )
   private val heavy = Backend(
@@ -27,7 +28,7 @@ object ApiSpec extends ZIOSpecDefault:
     ModelKind.Conversational,
     "https://up.test/v1",
     "grok-4",
-    Secret("heavy-key"),
+    BackendAuth.Key(Secret("heavy-key")),
     Nil,
   )
   private val local = Backend(
@@ -35,7 +36,7 @@ object ApiSpec extends ZIOSpecDefault:
     ModelKind.Conversational,
     "http://127.0.0.1:11434/v1",
     "qwen",
-    Secret("local-key"),
+    BackendAuth.Key(Secret("local-key")),
     Nil,
   )
   private val vpc = Backend(
@@ -43,7 +44,7 @@ object ApiSpec extends ZIOSpecDefault:
     ModelKind.Decision,
     "https://jev.internal.example",
     "jev-latest",
-    Secret("vpc-key"),
+    BackendAuth.Key(Secret("vpc-key")),
     Nil,
   )
 
@@ -183,7 +184,8 @@ object ApiSpec extends ZIOSpecDefault:
             live    <- TestTransport.make(TestTransport.Script(HttpResponse(200, Map.empty, answers(0.1))))
             seen    <- Ref.make(Chunk.empty[Request])
             client  <- recording(seen, _ => Response.json("""{"ok":true}"""))
-            gate = Gate(current, live, client, Load.fromFile(path, env))
+            tokens  <- TokenCache.make(client)
+            gate = Gate(current, live, client, tokens, Load.fromFile(path, env))
             _        <- ZIO.attempt(Files.writeString(path, "[["))
             denied   <- Api.routes(gate)(authed(Request.post("/admin/reload", Body.empty)))
             response <- Api.routes(gate)(
@@ -206,7 +208,8 @@ object ApiSpec extends ZIOSpecDefault:
       live    <- TestTransport.make(TestTransport.Script(HttpResponse(200, Map.empty, script)))
       seen    <- Ref.make(Chunk.empty[Request])
       client  <- recording(seen, respond)
-    yield (Gate(current, live, client, ZIO.fail(LoadError.Parse("unused"))), seen)
+      tokens  <- TokenCache.make(client)
+    yield (Gate(current, live, client, tokens, ZIO.fail(LoadError.Parse("unused"))), seen)
 
   private def recording(seen: Ref[Chunk[Request]], respond: Request => Response) =
     val routes = Routes.fromHandler(Handler.fromFunctionZIO { request =>

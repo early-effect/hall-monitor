@@ -31,6 +31,18 @@ object LoadSpec extends ZIOSpecDefault:
         loaded.policy.criteria.find(_.id.value == "pii").exists(_.faces == ModelKind.both),
         loaded.policy.criteria.find(_.id.value == "task").exists(_.faces == Set(ModelKind.Conversational)),
         loaded.policy.defaultPrefer.map(_.value) == List("public-fast"),
+        loaded.policy.backends
+          .find(_.id.value == "grok-4.7")
+          .exists(_.auth == hallmonitor.domain.BackendAuth.Grok("~/.grok")),
+        loaded.policy.backends
+          .find(_.id.value == "grok-4.6-bedrock")
+          .exists(_.auth == hallmonitor.domain.BackendAuth.Bedrock("us-dev", "us-west-2")),
+        loaded.policy.backends.find(_.id.value == "opus-5.5-bedrock").exists { case backend =>
+          backend.wire match
+            case hallmonitor.domain.UpstreamWire.Messages(headers) =>
+              headers.get("anthropic-version").contains("2023-06-01")
+            case _ => false
+        },
         loaded.listen.port == 8080,
         loaded.apiKey.reveal == "hm-secret",
       )

@@ -15,14 +15,32 @@ object ModelKind:
       case "decision"       => Some(Decision)
       case _                => None
 
+enum BackendAuth:
+  case Key(secret: Secret)
+  case Grok(home: String)
+  case Bedrock(profile: String, region: String)
+
+final case class ChatCompat(rewriteDeveloper: Boolean = false, maxTokensField: Option[String] = None)
+
+enum UpstreamWire:
+  case Chat(compat: ChatCompat = ChatCompat())
+  case Responses
+  case Messages(headers: Map[String, String])
+
 final case class Backend(
     id: BackendId,
     kind: ModelKind,
     baseUrl: String,
     upstreamModel: String,
-    apiKey: Secret,
+    auth: BackendAuth,
     aliases: List[String],
-)
+    wire: UpstreamWire = UpstreamWire.Chat(),
+):
+  def apiKey: Secret =
+    auth match
+      case BackendAuth.Key(secret) => secret
+      case _                       => Secret("")
+end Backend
 
 enum Criterion:
   def id: CriterionId

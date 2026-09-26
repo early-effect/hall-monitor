@@ -103,11 +103,58 @@ object Validate:
     aliases.zipWithIndex.foreach { (alias, aliasIndex) =>
       if alias.isEmpty then found += ConfigError.EmptyId(s"$owner alias[$aliasIndex]")
     }
-    val key = secret(owner, raw.apiKey, raw.apiKeyEnv, env) match
-      case Left(error)  => found += error; None
-      case Right(value) => Some(value)
+    val authName = raw.auth.map(_.trim).filter(_.nonEmpty).getOrElse("key")
+    val hasKey   = raw.apiKey.exists(_.trim.nonEmpty) || raw.apiKeyEnv.exists(_.trim.nonEmpty)
+    val auth     = authName match
+      case "key" =>
+        secret(owner, raw.apiKey, raw.apiKeyEnv, env) match
+          case Left(error)  => found += error; None
+          case Right(value) => Some(BackendAuth.Key(value))
+      case "grok" =>
+        if hasKey then found += ConfigError.AuthExtra(owner)
+        Some(BackendAuth.Grok(raw.grokHome.map(_.trim).filter(_.nonEmpty).getOrElse("~/.grok")))
+      case "bedrock" =>
+        if hasKey then found += ConfigError.AuthExtra(owner)
+        val profile = raw.profile.map(_.trim).filter(_.nonEmpty).getOrElse("us-dev")
+        val region  = raw.region.map(_.trim).filter(_.nonEmpty).getOrElse("us-west-2")
+        Some(BackendAuth.Bedrock(profile, region))
+      case other =>
+        found += ConfigError.BadAuth(owner, other)
+        None
+    val wire = raw.protocol.map(_.trim).filter(_.nonEmpty).getOrElse("chat") match
+      case "chat" =>
+        val field = raw.maxTokensField.map(_.trim).filter(_.nonEmpty) match
+          case Some("max_tokens") | Some("max_completion_tokens") => raw.maxTokensField.map(_.trim)
+          case Some(other)                                        =>
+            found += ConfigError.BadMaxTokensField(owner, other)
+            None
+          case None => None
+        Some(UpstreamWire.Chat(ChatCompat(rewriteDeveloper = raw.developerRole.contains(false), field)))
+      case "responses" =>
+        if kind.contains(ModelKind.Decision) then
+          found += ConfigError.BadProtocol(owner, "responses on a decision backend")
+        Some(UpstreamWire.Responses)
+      case "messages" =>
+        if kind.contains(ModelKind.Decision) then
+          found += ConfigError.BadProtocol(owner, "messages on a decision backend")
+        Some(UpstreamWire.Messages(raw.headers.getOrElse(Map.empty)))
+      case other =>
+        found += ConfigError.BadProtocol(owner, other)
+        None
     if found.nonEmpty then Left(found.toList)
-    else Right(Backend(BackendId(raw.id.trim), kind.get, base, raw.upstreamModel.trim, key.get, aliases))
+    else
+      Right(
+        Backend(
+          BackendId(raw.id.trim),
+          kind.get,
+          base,
+          raw.upstreamModel.trim,
+          auth.get,
+          aliases,
+          wire.get,
+        )
+      )
+    end if
   end readBackend
 
   private def readCriterion(raw: CriterionRaw): Either[List[ConfigError], Criterion] =

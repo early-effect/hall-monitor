@@ -59,7 +59,7 @@ Constraints intersect. A PII rule that allows only `local-strong` and `jev-vpc` 
 
 `stream: true` is returned as the upstream event stream, after the upstream body has been buffered. Time to first token is the full completion.
 
-See `examples/hall-monitor.toml`.
+See `examples/hall-monitor.toml`. Grok Build models there use `auth = "grok"` and `protocol = "responses"`. Bedrock uses `auth = "bedrock"` with an AWS SSO `profile` and `region`: Hall Monitor refreshes the SSO token and mints the bearer itself. Bedrock Opus also sets `protocol = "messages"` and `[backends.headers]`.
 
 ## Release
 

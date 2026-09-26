@@ -22,6 +22,14 @@ final case class BackendRaw(
     apiKey: Option[String],
     apiKeyEnv: Option[String],
     aliases: List[String],
+    protocol: Option[String],
+    auth: Option[String],
+    grokHome: Option[String],
+    profile: Option[String],
+    region: Option[String],
+    developerRole: Option[Boolean],
+    maxTokensField: Option[String],
+    headers: Option[Map[String, String]],
 )
 
 final case class PredicateRaw(
@@ -113,9 +121,77 @@ object AppRaw:
       .pipe(Config.string("baseUrl"))((acc, baseUrl) => (acc._1, acc._2, baseUrl))
       .pipe(Config.string("upstreamModel"))((acc, model) => (acc._1, acc._2, acc._3, model))
       .pipe(secret("apiKey", "apiKeyEnv"))((acc, secret) => (acc._1, acc._2, acc._3, acc._4, secret))
-      .pipe(Config.listOf("aliases", Config.string).withDefault(Nil)) { (acc, aliases) =>
-        val (id, kind, baseUrl, model, secret) = acc
-        BackendRaw(id, kind, baseUrl, model, secret.apiKey, secret.apiKeyEnv, aliases)
+      .pipe(Config.listOf("aliases", Config.string).withDefault(Nil))((acc, aliases) =>
+        (acc._1, acc._2, acc._3, acc._4, acc._5, aliases)
+      )
+      .pipe(Config.string("protocol").optional)((acc, protocol) =>
+        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, protocol)
+      )
+      .pipe(Config.string("auth").optional)((acc, auth) =>
+        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, auth)
+      )
+      .pipe(Config.string("grokHome").optional)((acc, grokHome) =>
+        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, acc._8, grokHome)
+      )
+      .pipe(Config.string("profile").optional)((acc, profile) =>
+        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, acc._8, acc._9, profile)
+      )
+      .pipe(Config.string("region").optional)((acc, region) =>
+        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, acc._8, acc._9, acc._10, region)
+      )
+      .pipe(Config.boolean("developerRole").optional)((acc, developerRole) =>
+        (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, acc._8, acc._9, acc._10, acc._11, developerRole)
+      )
+      .pipe(Config.string("maxTokensField").optional)((acc, maxTokensField) =>
+        (
+          acc._1,
+          acc._2,
+          acc._3,
+          acc._4,
+          acc._5,
+          acc._6,
+          acc._7,
+          acc._8,
+          acc._9,
+          acc._10,
+          acc._11,
+          acc._12,
+          maxTokensField,
+        )
+      )
+      .pipe(Config.table("headers", Config.string).optional) { (acc, headers) =>
+        val (
+          id,
+          kind,
+          baseUrl,
+          model,
+          secret,
+          aliases,
+          protocol,
+          auth,
+          grokHome,
+          profile,
+          region,
+          developerRole,
+          maxTokensField,
+        ) = acc
+        BackendRaw(
+          id,
+          kind,
+          baseUrl,
+          model,
+          secret.apiKey,
+          secret.apiKeyEnv,
+          aliases,
+          protocol,
+          auth,
+          grokHome,
+          profile,
+          region,
+          developerRole,
+          maxTokensField,
+          headers.filter(_.nonEmpty),
+        )
       }
 
   private val predicate: Config[PredicateRaw] =
