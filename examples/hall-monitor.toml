@@ -6,7 +6,13 @@
 apiKeyEnv = "HALL_MONITOR_API_KEY"
 maxStateChars = 16000
 upstreamIdleSeconds = 300
+downForSeconds = 15
 defaultPrefer = ["public-fast"]
+
+[quotas.grok-build]
+kind = "grok-weekly"
+home = "~/.grok"
+stopAt = 0.90
 
 [listen]
 host = "127.0.0.1"
@@ -39,6 +45,11 @@ kind = "conversational"
 baseUrl = "http://127.0.0.1:11434/v1"
 upstreamModel = "qwen-strong"
 apiKey = "ollama"
+maxInFlight = 1
+
+[backends.liveness]
+everySeconds = 5
+timeoutSeconds = 1
 
 # Grok Build session from `grok login`. Same Responses call dsh's grok-build adapter makes.
 [[backends]]
@@ -48,6 +59,7 @@ baseUrl = "https://api.x.ai/v1"
 upstreamModel = "grok-4.7"
 auth = "grok"
 protocol = "responses"
+quota = "grok-build"
 aliases = ["grok-build"]
 
 [[backends]]
@@ -57,6 +69,7 @@ baseUrl = "https://api.x.ai/v1"
 upstreamModel = "grok-4.6"
 auth = "grok"
 protocol = "responses"
+quota = "grok-build"
 
 # Bedrock. Hall Monitor reads the AWS SSO profile and mints the bearer itself.
 [[backends]]

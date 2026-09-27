@@ -14,6 +14,15 @@ final case class ClassifierRaw(
     apiKeyEnv: Option[String],
 )
 
+final case class LivenessRaw(
+    everySeconds: Int,
+    timeoutSeconds: Int,
+    path: Option[String],
+    enabled: Option[Boolean],
+)
+
+final case class QuotaRaw(kind: String, home: String, stopAt: Double)
+
 final case class BackendRaw(
     id: String,
     kind: String,
@@ -30,6 +39,10 @@ final case class BackendRaw(
     developerRole: Option[Boolean],
     maxTokensField: Option[String],
     headers: Option[Map[String, String]],
+    maxInFlight: Option[Int],
+    connectTimeoutSeconds: Option[Int],
+    liveness: Option[LivenessRaw],
+    quota: Option[String],
 )
 
 final case class PredicateRaw(
@@ -71,6 +84,8 @@ final case class AppRaw(
     criteria: List[CriterionRaw],
     rules: List[RuleRaw],
     defaultPrefer: List[String],
+    downForSeconds: Int,
+    quotas: Map[String, QuotaRaw],
 )
 
 object AppRaw:
@@ -88,8 +103,11 @@ object AppRaw:
       .pipe(Config.listOf("rules", rule).withDefault(Nil))((acc, rules) =>
         (acc._1, acc._2, acc._3, acc._4, acc._5, acc._6, acc._7, rules)
       )
-      .pipe(Config.listOf("defaultPrefer", Config.string).withDefault(Nil)) { (acc, prefer) =>
-        val (listen, secret, classifier, maxStateChars, idle, backends, criteria, rules) = acc
+      .pipe(Config.listOf("defaultPrefer", Config.string).withDefault(Nil))((acc, prefer) => (acc, prefer))
+      .pipe(Config.int("downForSeconds").withDefault(15))((acc, downFor) => (acc, downFor))
+      .pipe(Config.table("quotas", quota).withDefault(Map.empty)) { (acc, quotas) =>
+        val ((rest, prefer), downFor)                                                    = acc
+        val (listen, secret, classifier, maxStateChars, idle, backends, criteria, rules) = rest
         AppRaw(
           listen = listen,
           apiKey = secret.apiKey,
@@ -101,6 +119,8 @@ object AppRaw:
           criteria = criteria,
           rules = rules,
           defaultPrefer = prefer,
+          downForSeconds = downFor,
+          quotas = quotas,
         )
       }
 
@@ -159,7 +179,12 @@ object AppRaw:
           maxTokensField,
         )
       )
-      .pipe(Config.table("headers", Config.string).optional) { (acc, headers) =>
+      .pipe(Config.table("headers", Config.string).optional)((acc, headers) => (acc, headers))
+      .pipe(Config.int("maxInFlight").optional)((acc, maxInFlight) => (acc, maxInFlight))
+      .pipe(Config.int("connectTimeoutSeconds").optional)((acc, connect) => (acc, connect))
+      .pipe(liveness)((acc, check) => (acc, check))
+      .pipe(Config.string("quota").optional) { (acc, quotaName) =>
+        val (((rest, headers), maxInFlight), connect) = acc._1
         val (
           id,
           kind,
@@ -174,7 +199,8 @@ object AppRaw:
           region,
           developerRole,
           maxTokensField,
-        ) = acc
+        )         = rest
+        val check = acc._2
         BackendRaw(
           id,
           kind,
@@ -191,8 +217,26 @@ object AppRaw:
           developerRole,
           maxTokensField,
           headers.filter(_.nonEmpty),
+          maxInFlight,
+          connect,
+          check,
+          quotaName,
         )
       }
+
+  private def liveness: Config[Option[LivenessRaw]] =
+    map2(Config.int("everySeconds"), Config.int("timeoutSeconds"))((every, timeout) => (every, timeout))
+      .pipe(Config.string("path").optional)((acc, path) => (acc._1, acc._2, path))
+      .pipe(Config.boolean("enabled").optional) { (acc, enabled) =>
+        LivenessRaw(acc._1, acc._2, acc._3.filter(_.trim.nonEmpty), enabled)
+      }
+      .nested("liveness")
+      .optional
+
+  private val quota: Config[QuotaRaw] =
+    (Config.string("kind") ++ Config.string("home") ++ Config.double("stopAt")).map { case (kind, home, stopAt) =>
+      QuotaRaw(kind, home, stopAt)
+    }
 
   private val predicate: Config[PredicateRaw] =
     Config

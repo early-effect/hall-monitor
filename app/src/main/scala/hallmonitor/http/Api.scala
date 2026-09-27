@@ -1,9 +1,11 @@
 package hallmonitor.http
 
+import hallmonitor.admit.{Admit, Pool}
 import hallmonitor.classify.Classify
 import hallmonitor.config.LoadError
 import hallmonitor.domain.*
 import hallmonitor.forward.Forward
+import hallmonitor.journal.{CallRecord, Journal, Timings}
 import heddle.*
 import heddle.client.Client
 import zio.json.*
@@ -16,6 +18,8 @@ final case class Gate(
     client: Client,
     tokens: hallmonitor.forward.TokenCache,
     reload: IO[LoadError, Loaded],
+    journal: Journal,
+    pool: Pool,
 )
 
 object Api:
@@ -29,6 +33,8 @@ object Api:
       Method.POST / "jev" / "v1" / "systemone" ->
         Handler.fromFunctionZIO(call(gate, ModelKind.Decision, Wire.Jev)),
       Method.POST / "admin" / "reload" -> Handler.fromFunctionZIO(reload(gate)),
+      Method.GET / "admin" / "calls"   -> Handler.fromFunctionZIO(calls(gate)),
+      Method.GET / "admin" / "pool"    -> Handler.fromFunctionZIO(pool(gate)),
     ) @@ Middleware.requestId()
 
   private def models(gate: Gate, face: ModelKind, wire: Wire)(request: Request): UIO[Response] =
@@ -51,6 +57,39 @@ object Api:
         )
     }
 
+  private def calls(gate: Gate)(request: Request): UIO[Response] =
+    gate.current.get.flatMap { loaded =>
+      if !authorized(request, loaded.apiKey) then ZIO.succeed(error(Wire.OpenAi, RouteError.Unauthorized))
+      else
+        gate.journal.recent.map { records =>
+          val body = Json.Obj("calls" -> Json.Arr(records.map(Journal.view)))
+          Response.json(body.toJson)
+        }
+    }
+
+  private def pool(gate: Gate)(request: Request): UIO[Response] =
+    gate.current.get.flatMap { loaded =>
+      if !authorized(request, loaded.apiKey) then ZIO.succeed(error(Wire.OpenAi, RouteError.Unauthorized))
+      else
+        gate.pool.snapshot(loaded.policy.backends).map { entries =>
+          val body = Json.Obj(
+            "backends" -> Json.Arr(
+              Chunk.fromIterable(
+                entries.map { entry =>
+                  Json.Obj(
+                    "id"        -> Json.Str(entry.id.value),
+                    "presence"  -> Json.Str(entry.presence),
+                    "sinceMs"   -> Json.Num(entry.sinceMs),
+                    "checkedMs" -> Json.Num(entry.checkedMs),
+                  )
+                }
+              )
+            )
+          )
+          Response.json(body.toJson)
+        }
+    }
+
   private def call(gate: Gate, face: ModelKind, wire: Wire)(request: Request): UIO[Response] =
     gate.current.get.flatMap { loaded =>
       if !authorized(request, loaded.apiKey) then ZIO.succeed(error(wire, RouteError.Unauthorized))
@@ -71,95 +110,219 @@ object Api:
                       hallmonitor.classify.Subject(incoming.requested, incoming.text, incoming.toolNames),
                       gate.transport,
                     )
-                    .foldZIO(
-                      failure => complete(wire, face, failure, None, loaded, start, id, truncated = false, None),
-                      reading =>
-                        Resolve(
-                          loaded.policy,
-                          face,
-                          reading.answers,
-                          incoming.requested,
-                          reading.truncated,
-                        ) match
+                    .either
+                    .flatMap { classified =>
+                      Clock.nanoTime.flatMap { after =>
+                        val classifyFor = Duration.fromNanos(after - start)
+                        classified match
+                          case Left(failure) if loaded.classifier.isEmpty =>
+                            val plan = Resolve(loaded.policy, face, Map.empty, incoming.requested, truncated = false)
+                            finish(
+                              gate,
+                              face,
+                              loaded,
+                              id,
+                              start,
+                              classifyFor,
+                              None,
+                              plan.copy(rejected = Some(failure), order = Nil),
+                              Nil,
+                              None,
+                              Some(failure),
+                              asked = false,
+                              error(wire, failure),
+                            )
+                          case Left(RouteError.Classifier(detail)) =>
+                            val plan = Resolve(
+                              loaded.policy,
+                              face,
+                              Map.empty,
+                              incoming.requested,
+                              truncated = false,
+                              unclassified = true,
+                            )
+                            admit(
+                              gate,
+                              wire,
+                              face,
+                              loaded,
+                              id,
+                              start,
+                              classifyFor,
+                              None,
+                              plan,
+                              Some(detail),
+                              incoming.body,
+                            )
                           case Left(failure) =>
-                            complete(wire, face, failure, Some(reading), loaded, start, id, reading.truncated, None)
-                          case Right(backend) =>
-                            Forward
-                              .send(gate.client, gate.tokens, backend, incoming.body)
-                              .foldZIO(
-                                failure =>
-                                  complete(
-                                    wire,
-                                    face,
-                                    failure,
-                                    Some(reading),
-                                    loaded,
-                                    start,
-                                    id,
-                                    reading.truncated,
-                                    Some(backend),
-                                  ),
-                                response => complete(face, response, reading, loaded, start, id, backend),
-                              ),
-                    )
+                            val plan = Resolve(loaded.policy, face, Map.empty, incoming.requested, truncated = false)
+                            finish(
+                              gate,
+                              face,
+                              loaded,
+                              id,
+                              start,
+                              classifyFor,
+                              None,
+                              plan.copy(rejected = Some(failure), order = Nil),
+                              Nil,
+                              None,
+                              Some(failure),
+                              asked = false,
+                              error(wire, failure),
+                            )
+                          case Right(reading) =>
+                            val plan = Resolve(
+                              loaded.policy,
+                              face,
+                              reading.answers,
+                              incoming.requested,
+                              reading.truncated,
+                            )
+                            val host =
+                              if reading.asked then loaded.classifier.map(value => Classify.authority(value.baseUrl))
+                              else None
+                            admit(
+                              gate,
+                              wire,
+                              face,
+                              loaded,
+                              id,
+                              start,
+                              classifyFor,
+                              host,
+                              plan,
+                              None,
+                              incoming.body,
+                              reading.asked,
+                            )
+                        end match
+                      }
+                    }
                 },
         )
     }
 
-  private def complete(
+  private def admit(
+      gate: Gate,
       wire: Wire,
       face: ModelKind,
-      failure: RouteError,
-      reading: Option[hallmonitor.classify.Reading],
       loaded: Loaded,
-      start: Long,
       id: String,
-      truncated: Boolean,
-      backend: Option[Backend],
+      start: Long,
+      classifyFor: Duration,
+      classifier: Option[String],
+      plan: RoutePlan,
+      classifierDetail: Option[String],
+      body: Json.Obj,
+      asked: Boolean = true,
   ): UIO[Response] =
-    val response = annotate(error(wire, failure), loaded, truncated, backend, asked = reading.exists(_.asked))
-    log(id, face, loaded, reading, backend, response.status.code, start, truncated).as(response)
-  end complete
+    plan.rejected match
+      case Some(failure) =>
+        finish(
+          gate,
+          face,
+          loaded,
+          id,
+          start,
+          classifyFor,
+          classifier,
+          plan,
+          Nil,
+          None,
+          Some(failure),
+          asked,
+          error(wire, failure),
+        )
+      case None =>
+        Admit
+          .walk(
+            plan,
+            gate.pool,
+            loaded.quotas,
+            loaded.downForSeconds,
+            backend => Forward.send(gate.client, gate.tokens, backend, body),
+          )
+          .flatMap { admission =>
+            val failure = admission.failure.map {
+              case RouteError.NoneAvailable(text) =>
+                classifierDetail.fold(RouteError.NoneAvailable(text))(why =>
+                  RouteError.NoneAvailable(s"classifier failed ($why); $text")
+                )
+              case other => other
+            }
+            val response = admission.response.getOrElse(
+              error(wire, failure.getOrElse(RouteError.NoneAvailable("no backend accepted the call")))
+            )
+            finish(
+              gate,
+              face,
+              loaded,
+              id,
+              start,
+              classifyFor,
+              classifier,
+              plan,
+              admission.attempts,
+              admission.served,
+              failure,
+              asked,
+              response,
+            )
+          }
+    end match
+  end admit
 
-  private def complete(
+  private def finish(
+      gate: Gate,
       face: ModelKind,
+      loaded: Loaded,
+      id: String,
+      start: Long,
+      classifyFor: Duration,
+      classifier: Option[String],
+      plan: RoutePlan,
+      attempts: List[hallmonitor.admit.Attempt],
+      served: Option[Backend],
+      failure: Option[RouteError],
+      asked: Boolean,
       response: Response,
-      reading: hallmonitor.classify.Reading,
-      loaded: Loaded,
-      start: Long,
-      id: String,
-      backend: Backend,
   ): UIO[Response] =
-    val annotated = annotate(response, loaded, reading.truncated, Some(backend), asked = reading.asked)
-    log(id, face, loaded, Some(reading), Some(backend), annotated.status.code, start, reading.truncated).as(annotated)
-  end complete
-
-  private def log(
-      id: String,
-      face: ModelKind,
-      loaded: Loaded,
-      reading: Option[hallmonitor.classify.Reading],
-      backend: Option[Backend],
-      status: Int,
-      start: Long,
-      truncated: Boolean,
-  ): UIO[Unit] =
     Clock.nanoTime.flatMap { end =>
-      val host =
-        loaded.classifier
-          .filter(_ => reading.exists(_.asked))
-          .map(value => Classify.authority(value.baseUrl))
-          .getOrElse("-")
-      val answers = reading.map(value => Classify.summary(value.answers)).filter(_.nonEmpty).getOrElse("-")
-      val chosen  = backend.map(_.id.value).getOrElse("-")
-      val ms      = (end - start) / 1000000L
-      val name    = face match
-        case ModelKind.Conversational => "conversational"
-        case ModelKind.Decision       => "decision"
-      ZIO.logInfo(
-        s"$id face=$name classifier=$host $answers backend=$chosen upstream=$status elapsedMs=$ms truncated=$truncated"
+      val record = CallRecord(
+        id,
+        face,
+        classifier,
+        plan,
+        attempts,
+        served.map(_.id),
+        Timings(classifyFor, Duration.fromNanos(end - start)),
+        failure,
       )
+      val marked = timings(annotate(response, loaded, plan.trace.truncated, served, asked), record, asked)
+      gate.journal.publish(record).as(marked)
     }
+
+  private def timings(response: Response, record: CallRecord, asked: Boolean): Response =
+    val total        = response.withHeader("x-hall-monitor-total-ms", millis(record.timings.total))
+    val withClassify =
+      if asked then total.withHeader("x-hall-monitor-classify-ms", millis(record.timings.classify)) else total
+    val upstream = record.attempts.collectFirst {
+      case called: hallmonitor.admit.Attempt.Called
+          if record.served.contains(called.backend) && called.fellThrough.isEmpty && called.status.isDefined =>
+        called.elapsed
+    }
+    val withUpstream =
+      upstream.fold(withClassify)(elapsed => withClassify.withHeader("x-hall-monitor-upstream-ms", millis(elapsed)))
+    val first = record.plan.order.headOption.map(_.id)
+    (first, record.served) match
+      case (Some(from), Some(to)) if from != to =>
+        withUpstream.withHeader("x-hall-monitor-fallback-from", from.value)
+      case _ => withUpstream
+  end timings
+
+  private def millis(duration: Duration): String =
+    duration.toMillis.toString
 
   private def annotate(
       response: Response,
@@ -228,6 +391,8 @@ object Api:
       case RouteError.ModelNotAllowed(_, _) => Status.Forbidden
       case RouteError.NoEligibleBackend     => Status.Conflict
       case RouteError.Classifier(_)         => Status.ServiceUnavailable
+      case RouteError.Unreachable(_)        => Status.BadGateway
+      case RouteError.NoneAvailable(_)      => Status.ServiceUnavailable
       case RouteError.Upstream(code, _)     => Status.fromCode(code)
     json(status, wire.body(failure))
   end error
@@ -250,6 +415,8 @@ object Api:
         case RouteError.ModelNotAllowed(_, _) => ("invalid_request_error", "model_not_allowed")
         case RouteError.NoEligibleBackend     => ("invalid_request_error", "no_eligible_backend")
         case RouteError.Classifier(_)         => ("server_error", "classifier")
+        case RouteError.Unreachable(_)        => ("server_error", "unreachable")
+        case RouteError.NoneAvailable(_)      => ("server_error", "none_available")
         case RouteError.Upstream(_, _)        => ("server_error", "upstream")
       this match
         case OpenAi =>

@@ -35,6 +35,10 @@ enum ConfigError:
   case BadProtocol(owner: String, value: String)
   case AuthExtra(owner: String)
   case BadMaxTokensField(owner: String, value: String)
+  case UnknownQuota(owner: String, id: String)
+  case QuotaAuth(owner: String)
+  case LivenessWindow(owner: String)
+  case BadFraction(owner: String, value: Double)
 
   def message: String =
     this match
@@ -74,4 +78,8 @@ enum ConfigError:
       case BadProtocol(owner, value)       => s"$owner protocol $value is not recognised"
       case AuthExtra(owner)                => s"$owner auth does not take apiKey or apiKeyEnv"
       case BadMaxTokensField(owner, value) => s"$owner maxTokensField $value is not recognised"
+      case UnknownQuota(owner, id)         => s"$owner references unknown quota $id"
+      case QuotaAuth(owner)                => s"$owner quota requires auth = \"grok\""
+      case LivenessWindow(owner)           => s"$owner liveness timeoutSeconds must be <= everySeconds"
+      case BadFraction(owner, value)       => s"$owner stopAt $value is outside (0, 1]"
 end ConfigError

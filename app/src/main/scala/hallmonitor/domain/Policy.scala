@@ -27,6 +27,18 @@ enum UpstreamWire:
   case Responses
   case Messages(headers: Map[String, String])
 
+final case class Liveness(
+    everySeconds: Int,
+    timeoutSeconds: Int,
+    path: Option[String],
+    enabled: Boolean,
+)
+
+enum QuotaKind:
+  case GrokWeekly
+
+final case class Quota(id: QuotaId, kind: QuotaKind, home: String, stopAt: Double)
+
 final case class Backend(
     id: BackendId,
     kind: ModelKind,
@@ -35,6 +47,10 @@ final case class Backend(
     auth: BackendAuth,
     aliases: List[String],
     wire: UpstreamWire = UpstreamWire.Chat(),
+    maxInFlight: Option[Int] = None,
+    connectTimeoutSeconds: Int = 3,
+    liveness: Option[Liveness] = None,
+    quota: Option[QuotaId] = None,
 ):
   def apiKey: Secret =
     auth match
@@ -105,4 +121,6 @@ final case class Loaded(
     classifier: Option[ClassifierEndpoint],
     listen: Listen,
     upstreamIdleSeconds: Int,
+    quotas: Map[QuotaId, Quota] = Map.empty,
+    downForSeconds: Int = 15,
 )

@@ -18,6 +18,7 @@ object BuildSite extends DocsSite:
       Keys.doc,
       AHarness.doc,
       TheTape.doc,
+      TheLog.doc,
     )
 
   override def site: SiteModel =

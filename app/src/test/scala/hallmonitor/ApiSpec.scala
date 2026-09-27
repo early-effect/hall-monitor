@@ -1,9 +1,11 @@
 package hallmonitor
 
+import hallmonitor.admit.Pool
 import hallmonitor.config.{Load, LoadError}
 import hallmonitor.domain.*
 import hallmonitor.forward.TokenCache
 import hallmonitor.http.{Api, Gate}
+import hallmonitor.journal.Journal
 import heddle.*
 import heddle.client.Client
 import hexis.*
@@ -171,6 +173,71 @@ object ApiSpec extends ZIOSpecDefault:
         !decisionBody.contains("classifier.test"),
       )
     },
+    test("a routed call records who served") {
+      for
+        (gate, _) <- harness(answers(0.1), _ => Response.json("""{"ok":true}"""))
+        response  <- Api.routes(gate)(
+          authed(Request.post("/v1/chat/completions", Body.json(chat("hall-monitor", stream = false))))
+        )
+        recent <- gate.journal.recent
+      yield assertTrue(
+        response.status == Status.Ok,
+        response.header("x-hall-monitor-backend").contains("public-fast"),
+        response.header("x-hall-monitor-total-ms").isDefined,
+        recent.headOption.flatMap(_.served.map(_.value)).contains("public-fast"),
+        recent.headOption.exists(_.attempts.nonEmpty),
+      )
+    },
+    test("admin calls and pool require the bearer and return the record") {
+      for
+        (gate, _) <- harness(answers(0.1), _ => Response.json("""{"ok":true}"""))
+        _         <- Api.routes(gate)(
+          authed(Request.post("/v1/chat/completions", Body.json(chat("hall-monitor", stream = false))))
+        )
+        denied    <- Api.routes(gate)(Request.get("/admin/calls"))
+        calls     <- Api.routes(gate)(authed(Request.get("/admin/calls")))
+        pool      <- Api.routes(gate)(authed(Request.get("/admin/pool")))
+        callsBody <- calls.body.utf8
+        poolBody  <- pool.body.utf8
+      yield assertTrue(
+        denied.status == Status.Unauthorized,
+        calls.status == Status.Ok,
+        callsBody.contains(""""served":"public-fast""""),
+        pool.status == Status.Ok,
+        poolBody.contains("public-fast"),
+      )
+    },
+    test("a missing bearer writes nothing") {
+      for
+        (gate, _) <- harness(answers(0.1), _ => Response.json("""{"ok":true}"""))
+        _ <- Api.routes(gate)(Request.post("/v1/chat/completions", Body.json(chat("hall-monitor", stream = false))))
+        recent <- gate.journal.recent
+      yield assertTrue(recent.isEmpty)
+    },
+    test("an unread note still serves inside the lock") {
+      for
+        current <- Ref.make(loaded)
+        live    <- TestTransport.make(
+          TestTransport.Script(HttpResponse(400, Map.empty, """{"message":"classifier down"}"""))
+        )
+        seen    <- Ref.make(Chunk.empty[Request])
+        client  <- recording(seen, _ => Response.json("""{"ok":true}"""))
+        tokens  <- TokenCache.make(client)
+        journal <- Journal.make
+        pool    <- Pool.make(_ => ZIO.fail(RouteError.Upstream(502, "no probe")))
+        gate = Gate(current, live, client, tokens, ZIO.fail(LoadError.Parse("unused")), journal, pool)
+        response <- Api.routes(gate)(
+          authed(Request.post("/v1/chat/completions", Body.json(chat("hall-monitor", stream = false))))
+        )
+        recent    <- journal.recent
+        forwarded <- seen.get
+      yield assertTrue(
+        response.status == Status.Ok,
+        response.header("x-hall-monitor-backend").contains("local-strong"),
+        recent.headOption.exists(_.plan.trace.unclassified),
+        forwarded.head.url.render.contains("11434"),
+      )
+    },
     test("a bad reload keeps the previous policy") {
       ZIO
         .acquireRelease(ZIO.attempt(Files.createTempDirectory("hall-monitor")))(dir => ZIO.attempt(delete(dir)).ignore)
@@ -185,7 +252,9 @@ object ApiSpec extends ZIOSpecDefault:
             seen    <- Ref.make(Chunk.empty[Request])
             client  <- recording(seen, _ => Response.json("""{"ok":true}"""))
             tokens  <- TokenCache.make(client)
-            gate = Gate(current, live, client, tokens, Load.fromFile(path, env))
+            journal <- Journal.make
+            pool    <- Pool.make(_ => ZIO.fail(RouteError.Upstream(502, "no probe")))
+            gate = Gate(current, live, client, tokens, Load.fromFile(path, env), journal, pool)
             _        <- ZIO.attempt(Files.writeString(path, "[["))
             denied   <- Api.routes(gate)(authed(Request.post("/admin/reload", Body.empty)))
             response <- Api.routes(gate)(
@@ -209,7 +278,9 @@ object ApiSpec extends ZIOSpecDefault:
       seen    <- Ref.make(Chunk.empty[Request])
       client  <- recording(seen, respond)
       tokens  <- TokenCache.make(client)
-    yield (Gate(current, live, client, tokens, ZIO.fail(LoadError.Parse("unused"))), seen)
+      journal <- Journal.make
+      pool    <- Pool.make(_ => ZIO.fail(RouteError.Upstream(502, "no probe")))
+    yield (Gate(current, live, client, tokens, ZIO.fail(LoadError.Parse("unused")), journal, pool), seen)
 
   private def recording(seen: Ref[Chunk[Request]], respond: Request => Response) =
     val routes = Routes.fromHandler(Handler.fromFunctionZIO { request =>
