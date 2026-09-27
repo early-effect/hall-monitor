@@ -19,7 +19,11 @@ then go back to whatever you were building.
 | API key | The Hall Monitor key |
 
 `hall-monitor` means the monitor chooses. A backend id, or an alias such as
-`grok-fast`, means "this one", and the locks still get a vote.
+`grok-fast`, means "try this one first", and the locks still get a vote. If
+that model is down, full, or over its stop line, another model the locks still
+allow may answer. `x-hall-monitor-backend` names who did.
+`x-hall-monitor-fallback-from` names the one you asked for when it was not
+them.
 
 Hexis arrives carrying a model name from home, usually `jev-latest`. Leave that
 nickname off the decision board and the answer is 404. The monitor will not

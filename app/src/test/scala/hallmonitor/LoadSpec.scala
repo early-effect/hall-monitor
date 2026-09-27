@@ -181,6 +181,66 @@ object LoadSpec extends ZIOSpecDefault:
     test("a constraint whose allow list misses a face it applies to fails") {
       fails(rule("allow = [\"public-fast\"]"), ConfigError.AllowMissesFace("rule pii-lock", "decision"))
     },
+    test("liveness and a grok quota load") {
+      val text = minimal(
+        """
+          |apiKey = "hm"
+          |downForSeconds = 20
+          |[quotas.grok-build]
+          |kind = "grok-weekly"
+          |home = "~/.grok"
+          |stopAt = 0.9
+          |[[backends]]
+          |id = "local"
+          |kind = "conversational"
+          |baseUrl = "http://127.0.0.1:9"
+          |upstreamModel = "m"
+          |apiKey = "ollama"
+          |maxInFlight = 1
+          |[backends.liveness]
+          |everySeconds = 5
+          |timeoutSeconds = 1
+          |[[backends]]
+          |id = "grok"
+          |kind = "conversational"
+          |baseUrl = "https://api.x.ai/v1"
+          |upstreamModel = "grok-4.7"
+          |auth = "grok"
+          |quota = "grok-build"
+          |""".stripMargin
+      )
+      for loaded <- Load.fromString(text, sampleEnv)
+      yield assertTrue(
+        loaded.downForSeconds == 20,
+        loaded.policy.backends.find(_.id.value == "local").exists { backend =>
+          backend.maxInFlight.contains(1) &&
+          backend.liveness.exists(check => check.everySeconds == 5 && check.timeoutSeconds == 1 && check.path.isEmpty)
+        },
+        loaded.quotas.get(hallmonitor.domain.QuotaId("grok-build")).exists(_.stopAt == 0.9),
+        loaded.policy.backends.find(_.id.value == "grok").exists(_.quota.map(_.value).contains("grok-build")),
+      )
+    },
+    test("a grok quota on key auth is rejected") {
+      fails(
+        minimal(
+          """
+            |apiKey = "hm"
+            |[quotas.grok-build]
+            |kind = "grok-weekly"
+            |home = "~/.grok"
+            |stopAt = 0.9
+            |[[backends]]
+            |id = "keyed"
+            |kind = "conversational"
+            |baseUrl = "https://api.x.ai/v1"
+            |upstreamModel = "m"
+            |apiKey = "x"
+            |quota = "grok-build"
+            |""".stripMargin
+        ),
+        ConfigError.QuotaAuth("keyed"),
+      )
+    },
     test("resolvePath prefers the argument, then the env var, then hall-monitor.toml") {
       assertTrue(
         Load.resolvePath(List("from-arg.toml"), _ => None) == Path.of("from-arg.toml"),

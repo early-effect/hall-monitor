@@ -3,55 +3,72 @@ package hallmonitor.domain
 import hexis.{Answer, Confidence}
 
 object Resolve:
-  private enum Ruling:
-    case Applies
-    case DoesNotApply
-    case Uncertain
-
   def apply(
       policy: Policy,
       face: ModelKind,
       answers: Map[CriterionId, Answer[?]],
       requested: Option[String],
       truncated: Boolean,
-  ): Either[RouteError, Backend] =
-    val index    = policy.criteria.iterator.map(c => c.id -> c).toMap
-    val catalog  = policy.backends.filter(_.kind == face)
-    val narrowed = policy.rules.foldLeft(catalog) {
-      case (current, rule: Rule.Constraint) =>
-        ruling(rule.when, face, index, answers, truncated) match
-          case Some(Ruling.Applies) | Some(Ruling.Uncertain) =>
-            current.filter(backend => rule.allow.contains(backend.id))
-          case _ => current
-      case (current, _) => current
+      unclassified: Boolean = false,
+  ): RoutePlan =
+    val index             = policy.criteria.iterator.map(c => c.id -> c).toMap
+    val catalog           = policy.backends.filter(_.kind == face)
+    val (narrowed, steps) =
+      policy.rules.foldLeft((catalog, List.empty[Step])) { case ((current, acc), rule) =>
+        val judged = judgeRule(rule.when, face, index, answers, truncated)
+        rule match
+          case constraint: Rule.Constraint =>
+            val narrow    = judged == Ruling.Applies || judged == Ruling.Uncertain
+            val remaining = if narrow then current.filter(backend => constraint.allow.contains(backend.id)) else current
+            val step      = Step.Constraint(
+              constraint.id,
+              judged,
+              narrow,
+              constraint.allow.toList.sortBy(_.value),
+              remaining.map(_.id),
+            )
+            (remaining, acc :+ step)
+          case preference: Rule.Preference =>
+            val step = Step.Preference(preference.id, judged, judged == Ruling.Applies, preference.prefer)
+            (current, acc :+ step)
+        end match
+      }
+    val prefs = policy.rules.collect {
+      case rule: Rule.Preference if steps.collectFirst {
+            case step: Step.Preference if step.id == rule.id && step.ranked => step
+          }.isDefined =>
+        rule
     }
-    val name = requested.map(_.trim).filter(value => value.nonEmpty && value != Names.Auto)
+    val name  = requested.map(_.trim).filter(value => value.nonEmpty && value != Names.Auto)
+    val trace = Trace(name, answers, steps, narrowed.map(_.id), truncated, unclassified)
     name match
       case Some(wanted) =>
         catalog.find(backend => backend.id.value == wanted || backend.aliases.contains(wanted)) match
-          case None                                                  => Left(RouteError.UnknownModel(wanted))
+          case None =>
+            plan(Nil, trace, Some(RouteError.UnknownModel(wanted)))
           case Some(backend) if !narrowed.exists(_.id == backend.id) =>
-            Left(RouteError.ModelNotAllowed(wanted, narrowed.map(_.id)))
-          case Some(backend) => Right(backend)
-      case None if narrowed.isEmpty => Left(RouteError.NoEligibleBackend)
-      case None => Right(rank(policy, narrowed, preferences(policy, face, index, answers, truncated)))
+            plan(Nil, trace, Some(RouteError.ModelNotAllowed(wanted, narrowed.map(_.id))))
+          case Some(backend) =>
+            val rest = rank(policy, narrowed.filterNot(_.id == backend.id), prefs)
+            plan(
+              backend :: rest,
+              trace.copy(steps = steps :+ Step.Pinned(wanted, backend.id) :+ Step.Ranked(rest.map(_.id))),
+              None,
+            )
+      case None if narrowed.isEmpty =>
+        plan(Nil, trace, Some(RouteError.NoEligibleBackend))
+      case None =>
+        val order = rank(policy, narrowed, prefs)
+        plan(order, trace.copy(steps = steps :+ Step.Ranked(order.map(_.id))), None)
+    end match
   end apply
 
-  private def preferences(
-      policy: Policy,
-      face: ModelKind,
-      index: Map[CriterionId, Criterion],
-      answers: Map[CriterionId, Answer[?]],
-      truncated: Boolean,
-  ): List[Rule.Preference] =
-    policy.rules.collect {
-      case rule: Rule.Preference if ruling(rule.when, face, index, answers, truncated).contains(Ruling.Applies) =>
-        rule
-    }
+  private def plan(order: List[Backend], trace: Trace, rejected: Option[RouteError]): RoutePlan =
+    RoutePlan(order, trace, rejected)
 
-  private def rank(policy: Policy, candidates: List[Backend], prefs: List[Rule.Preference]): Backend =
+  private def rank(policy: Policy, candidates: List[Backend], prefs: List[Rule.Preference]): List[Backend] =
     val order = policy.backends.iterator.map(_.id).zipWithIndex.toMap
-    candidates.minBy { backend =>
+    candidates.sortBy { backend =>
       val ruleScore = prefs.foldLeft(0) { (sum, pref) =>
         val at = pref.prefer.indexOf(backend.id)
         sum + (if at < 0 then pref.prefer.length else at)
@@ -62,20 +79,18 @@ object Resolve:
     }
   end rank
 
-  private def ruling(
+  private def judgeRule(
       when: List[Predicate],
       face: ModelKind,
       index: Map[CriterionId, Criterion],
       answers: Map[CriterionId, Answer[?]],
       truncated: Boolean,
-  ): Option[Ruling] =
-    if when.isEmpty then Some(Ruling.Applies)
+  ): Ruling =
+    if when.isEmpty then Ruling.Applies
     else
       val kept = when.filter(predicate => index.get(predicate.criterion).exists(_.faces.contains(face)))
-      if kept.isEmpty then None
-      else
-        val judged = kept.map(predicate => judge(predicate, index(predicate.criterion), answers, truncated))
-        Some(combine(judged))
+      if kept.isEmpty then Ruling.NotOnThisFace
+      else combine(kept.map(predicate => judge(predicate, index(predicate.criterion), answers, truncated)))
 
   private def combine(rulings: List[Ruling]): Ruling =
     if rulings.exists(_ == Ruling.DoesNotApply) then Ruling.DoesNotApply

@@ -53,9 +53,16 @@ Yes or no is the probability itself: `yesAtLeast = 0.4` means "maybe" still
 clicks the lock. Pick the number for the caution you actually want, then live
 with it.
 
+An unread note shuts every lock and silences every preference. The classifier
+was down, so the monitor does not guess that the note was harmless. A model
+that is down, full, or past its stop line is skipped only inside whoever is
+still in the room. Down means the last check failed. The model stays on the
+board, and a later check puts it back.
+
 Send the model name `hall-monitor` when you want the monitor to choose. Send a
-real name from the board when you want that model. You get them when the locks
-still have them in the room.
+real name from the board when you want that model tried first. You get them
+when the locks still have them in the room. If that model cannot take the
+call, another model still in the room may answer. The response says who did.
 """,
     exampleValue {
       Hall.chosen(

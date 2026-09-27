@@ -60,7 +60,8 @@ object Hall:
       truncated: Boolean = false,
       rules: Policy = policy,
   ): Either[RouteError, String] =
-    Resolve(rules, face, answers, requested, truncated).map(_.id.value)
+    val route = Resolve(rules, face, answers, requested, truncated)
+    route.rejected.fold[Either[RouteError, String]](Right(route.order.head.id.value))(Left(_))
 
   def model(id: String, kind: ModelKind, aliases: List[String] = Nil): Backend =
     Backend(BackendId(id), kind, s"http://$id", id, BackendAuth.Key(Secret("secret")), aliases)

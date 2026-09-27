@@ -58,10 +58,17 @@ object ResolveSpec extends ZIOSpecDefault:
     },
     test("a named model outside the allowed set is rejected") {
       val answers = Map[CriterionId, Answer[?]](noul("pii", 0.95), score("weight", 3.0, 0.9))
+      val route   = Resolve(policy, ModelKind.Conversational, answers, Some("public-heavy"), truncated = false)
       assertTrue:
-        Resolve(policy, ModelKind.Conversational, answers, Some("public-heavy"), truncated = false) match
-          case Left(RouteError.ModelNotAllowed("public-heavy", allowed)) =>
-            !allowed.map(_.value).contains("public-heavy")
+        route.rejected match
+          case Some(RouteError.ModelNotAllowed("public-heavy", allowed)) =>
+            !allowed.map(_.value).contains("public-heavy") &&
+            route.trace.steps
+              .collectFirst {
+                case step: Step.Constraint if step.id == RuleId("pii-lock") =>
+                  step.remaining.map(_.value)
+              }
+              .contains(List("local-fast", "local-strong"))
           case _ => false
     },
     test("a decision call with PII goes to the allowed decision model") {
@@ -146,9 +153,91 @@ object ResolveSpec extends ZIOSpecDefault:
       assertTrue(chosen(open, ModelKind.Conversational, Map.empty, None) == Right("public-fast"))
     },
     test("an unknown name is rejected") {
+      val route = Resolve(policy, ModelKind.Conversational, Map.empty, Some("nope"), truncated = false)
+      assertTrue(route.rejected.contains(RouteError.UnknownModel("nope")), route.order.isEmpty)
+    },
+    test("a legal pin is first and the ranked remainder follows") {
+      val answers = Map[CriterionId, Answer[?]](noul("pii", 0.95))
+      val route   = Resolve(policy, ModelKind.Conversational, answers, Some("local-strong"), truncated = false)
       assertTrue(
-        Resolve(policy, ModelKind.Conversational, Map.empty, Some("nope"), truncated = false) ==
-          Left(RouteError.UnknownModel("nope"))
+        route.order.map(_.id.value) == List("local-strong", "local-fast"),
+        route.trace.steps.contains(Step.Pinned("local-strong", BackendId("local-strong"))),
+        route.trace.steps.contains(Step.Ranked(List(BackendId("local-fast")))),
+      )
+    },
+    test("an uncertain choice still narrows a constraint and does not rank a preference") {
+      val narrow = policy.copy(
+        rules = List(
+          Rule.Constraint(
+            RuleId("maybe-lock"),
+            List(Predicate.ChoiceIs(CriterionId("task"), Set("coding-light"), Confidence.unsafely(0.5))),
+            Set(BackendId("local-strong")),
+          ),
+          Rule.Preference(
+            RuleId("maybe-like"),
+            List(Predicate.ChoiceIs(CriterionId("task"), Set("coding-light"), Confidence.unsafely(0.5))),
+            List(BackendId("public-fast")),
+          ),
+        )
+      )
+      val route = Resolve(
+        narrow,
+        ModelKind.Conversational,
+        Map(choice("task", "coding-light", 0.2)),
+        None,
+        truncated = false,
+      )
+      assertTrue(
+        route.trace.steps.contains(
+          Step.Constraint(
+            RuleId("maybe-lock"),
+            Ruling.Uncertain,
+            narrowed = true,
+            List(BackendId("local-strong")),
+            List(BackendId("local-strong")),
+          )
+        ),
+        route.trace.steps.contains(
+          Step.Preference(RuleId("maybe-like"), Ruling.Uncertain, ranked = false, List(BackendId("public-fast")))
+        ),
+      )
+    },
+    test("a conversational rule is not on the decision face") {
+      val route = Resolve(policy, ModelKind.Decision, Map(noul("pii", 0.1)), None, truncated = false)
+      assertTrue(
+        route.trace.steps.contains(
+          Step.Preference(RuleId("light-code"), Ruling.NotOnThisFace, ranked = false, List(BackendId("public-fast")))
+        )
+      )
+    },
+    test("empty answers shut every lock and leave preferences quiet") {
+      val route = Resolve(
+        policy,
+        ModelKind.Conversational,
+        Map.empty,
+        None,
+        truncated = false,
+        unclassified = true,
+      )
+      assertTrue(
+        route.trace.unclassified,
+        route.rejected.isEmpty,
+        route.order.map(_.id.value) == List("local-fast", "local-strong"),
+        route.trace.steps.contains(
+          Step.Constraint(
+            RuleId("pii-lock"),
+            Ruling.Uncertain,
+            narrowed = true,
+            List("jev-vpc", "local-fast", "local-strong").map(BackendId(_)),
+            List(BackendId("local-fast"), BackendId("local-strong")),
+          )
+        ),
+        route.trace.steps.contains(
+          Step.Preference(RuleId("light-code"), Ruling.Uncertain, ranked = false, List(BackendId("public-fast")))
+        ),
+        route.trace.steps.contains(
+          Step.Preference(RuleId("heavy"), Ruling.Uncertain, ranked = false, List(BackendId("public-heavy")))
+        ),
       )
     },
     test("an alias selects that backend") {
@@ -164,7 +253,8 @@ object ResolveSpec extends ZIOSpecDefault:
       requested: Option[String],
       truncated: Boolean = false,
   ): Either[RouteError, String] =
-    Resolve(policy, face, answers, requested, truncated).map(_.id.value)
+    val route = Resolve(policy, face, answers, requested, truncated)
+    route.rejected.fold[Either[RouteError, String]](Right(route.order.head.id.value))(Left(_))
 
   private def backend(id: String, kind: ModelKind, aliases: List[String] = Nil): Backend =
     Backend(BackendId(id), kind, s"http://$id", id, BackendAuth.Key(Secret("secret")), aliases)

@@ -1,9 +1,11 @@
 package hallmonitor
 
+import hallmonitor.admit.{Checks, GrokQuota, Pool}
 import hallmonitor.config.Load
 import hallmonitor.domain.Loaded
 import hallmonitor.forward.TokenCache
 import hallmonitor.http.{Api, Gate}
+import hallmonitor.journal.Journal
 import heddle.client.Client
 import heddle.{BytesLength, Server}
 import hexis.config.HeddleSettings
@@ -29,9 +31,18 @@ object Main extends ZIOAppDefault:
       client    <- ZIO.service[Client].provide(ZLayer.succeed(clientConfig(loaded)) >>> Client.layer)
       transport <- ZIO.service[hexis.Transport].provide(ZLayer.succeed(bootstrap) >>> hexis.Transport.live)
       reload = System.envs.orDie.flatMap(next => Load.fromFile(path, next.get))
-      tokens <- TokenCache.make(client)
-      _      <- ZIO.logInfo(s"hall-monitor listening on ${loaded.listen.host}:${loaded.listen.port} (Ctrl-C to stop)")
-      _      <- Server.serve(Api.routes(Gate(current, transport, client, tokens, reload)), serverConfig(loaded))
+      tokens    <- TokenCache.make(client)
+      discovery <- Ref.make(Option.empty[String])
+      pool      <- Pool.make(quota => GrokQuota.fetch(quota, client, discovery))
+      journal   <- Journal.make
+      _ <- ZIO.logInfo(s"hall-monitor listening on ${loaded.listen.host}:${loaded.listen.port} (Ctrl-C to stop)")
+      _ <- ZIO.scoped {
+        Checks.supervise(current, pool, client).forkScoped *>
+          Server.serve(
+            Api.routes(Gate(current, transport, client, tokens, reload, journal, pool)),
+            serverConfig(loaded),
+          )
+      }
     yield ()
 
   /** Ctrl-C and `kill` both stop the process. sbt treats a raw SIGINT status of 130 as a crash, so exit 0. */
@@ -53,9 +64,16 @@ object Main extends ZIOAppDefault:
 
   private def clientConfig(loaded: Loaded): Client.Config =
     Client.Config.default.copy(
+      connectTimeout = connectBudget(loaded),
       idleTimeout = Duration.fromSeconds(loaded.upstreamIdleSeconds.toLong),
       maxBodyBytes = BytesLength(32L * 1024L * 1024L),
     )
+
+  /** Connect budget is the longest backend or liveness timeout. Generation stays on `idleTimeout`. */
+  private def connectBudget(loaded: Loaded): Duration =
+    val connects = loaded.policy.backends.map(_.connectTimeoutSeconds)
+    val checks   = loaded.policy.backends.flatMap(backend => Checks.effective(backend).map(_.timeoutSeconds))
+    Duration.fromSeconds((connects ++ checks).maxOption.getOrElse(3).toLong)
 
   private val bootstrap: hexis.Config =
     hexis.Config(

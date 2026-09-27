@@ -17,7 +17,8 @@ already knows OpenAI frames still knows these.
 
 The bytes stay the upstream's bytes. Long answers want a patient idle timeout:
 `upstreamIdleSeconds`, five minutes in the sample. The classifier keeps a
-shorter clock. Picking who speaks should finish before the speech does.
+shorter clock. Picking who speaks should finish before the speech does. How
+long the classifier and each attempt took is on the log page.
 """
   )
 end TheTape

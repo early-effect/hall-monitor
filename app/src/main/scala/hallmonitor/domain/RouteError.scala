@@ -8,6 +8,8 @@ enum RouteError:
   case NoEligibleBackend
   case Classifier(detail: String)
   case Upstream(status: Int, body: String)
+  case Unreachable(detail: String)
+  case NoneAvailable(detail: String)
 
   def message: String =
     this match
@@ -17,7 +19,9 @@ enum RouteError:
       case ModelNotAllowed(name, allowed) =>
         val names = allowed.map(_.value).mkString(", ")
         s"model $name is not allowed for this request (allowed: $names)"
-      case NoEligibleBackend  => "no backend is allowed for this request"
-      case Classifier(detail) => detail
-      case Upstream(_, body)  => body
+      case NoEligibleBackend     => "no backend is allowed for this request"
+      case Classifier(detail)    => detail
+      case Upstream(_, body)     => body
+      case Unreachable(detail)   => detail
+      case NoneAvailable(detail) => detail
 end RouteError

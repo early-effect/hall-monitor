@@ -11,6 +11,7 @@ object Validate:
 
     if raw.maxStateChars <= 0 then note(ConfigError.BadLimit("maxStateChars"))
     if raw.upstreamIdleSeconds <= 0 then note(ConfigError.BadLimit("upstreamIdleSeconds"))
+    if raw.downForSeconds <= 0 then note(ConfigError.BadLimit("downForSeconds"))
     if raw.listen.host.trim.isEmpty then note(ConfigError.EmptyId("listen host"))
     if raw.listen.port <= 0 || raw.listen.port > 65535 then note(ConfigError.BadLimit("listen.port"))
 
@@ -63,6 +64,22 @@ object Validate:
         None
     }
 
+    val quotas = raw.quotas.flatMap { (name, quota) =>
+      readQuota(name, quota) match
+        case Left(error)  => note(error); None
+        case Right(value) => Some(value.id -> value)
+    }.toMap
+    backends.foreach { backend =>
+      backend.quota.foreach { name =>
+        quotas.get(name) match
+          case None        => note(ConfigError.UnknownQuota(backend.id.value, name.value))
+          case Some(quota) =>
+            (quota.kind, backend.auth) match
+              case (QuotaKind.GrokWeekly, _: BackendAuth.Grok) => ()
+              case (QuotaKind.GrokWeekly, _)                   => note(ConfigError.QuotaAuth(backend.id.value))
+      }
+    }
+
     if errors.nonEmpty then Left(errors.toList)
     else
       Right(
@@ -78,6 +95,8 @@ object Validate:
           classifier = classifier,
           listen = Listen(raw.listen.host.trim, raw.listen.port),
           upstreamIdleSeconds = raw.upstreamIdleSeconds,
+          quotas = quotas,
+          downForSeconds = raw.downForSeconds,
         )
       )
     end if
@@ -141,6 +160,31 @@ object Validate:
       case other =>
         found += ConfigError.BadProtocol(owner, other)
         None
+    val maxInFlight = raw.maxInFlight match
+      case Some(value) if value < 1 => found += ConfigError.BadLimit(s"$owner maxInFlight"); None
+      case other                    => other
+    val connect = raw.connectTimeoutSeconds match
+      case Some(value) if value < 1 => found += ConfigError.BadLimit(s"$owner connectTimeoutSeconds"); 3
+      case Some(value)              => value
+      case None                     => 3
+    val liveness = raw.liveness match
+      case Some(value) if value.everySeconds < 1 || value.timeoutSeconds < 1 =>
+        found += ConfigError.BadLimit(s"$owner liveness")
+        None
+      case Some(value) if value.timeoutSeconds > value.everySeconds =>
+        found += ConfigError.LivenessWindow(owner)
+        None
+      case Some(value) =>
+        Some(
+          Liveness(
+            value.everySeconds,
+            value.timeoutSeconds,
+            value.path.map(_.trim).filter(_.nonEmpty),
+            value.enabled.getOrElse(true),
+          )
+        )
+      case None => None
+    val quotaName = raw.quota.map(_.trim).filter(_.nonEmpty)
     if found.nonEmpty then Left(found.toList)
     else
       Right(
@@ -152,6 +196,10 @@ object Validate:
           auth.get,
           aliases,
           wire.get,
+          maxInFlight,
+          connect,
+          liveness,
+          quotaName.map(QuotaId(_)),
         )
       )
     end if
@@ -377,6 +425,16 @@ object Validate:
         if !seen.add(name) then note(ConfigError.AliasClash(name))
       }
     }
+
+  private def readQuota(name: String, raw: QuotaRaw): Either[ConfigError, Quota] =
+    val owner = if name.trim.isEmpty then "quota" else s"quota $name"
+    if name.trim.isEmpty then Left(ConfigError.EmptyId("quota"))
+    else if raw.home.trim.isEmpty then Left(ConfigError.EmptyId(s"$owner home"))
+    else if raw.stopAt <= 0.0 || raw.stopAt > 1.0 then Left(ConfigError.BadFraction(owner, raw.stopAt))
+    else
+      raw.kind.trim match
+        case "grok-weekly" => Right(Quota(QuotaId(name.trim), QuotaKind.GrokWeekly, raw.home.trim, raw.stopAt))
+        case other         => Left(ConfigError.BadKind(owner, other))
 
   private def secret(
       owner: String,

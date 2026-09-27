@@ -20,7 +20,12 @@ object Forward:
       val request = Request(Method.POST, Url.parse(url), extra(backend, headers), Body.json(body.toJson))
       client
         .batched(request)
-        .mapError(_ => RouteError.Upstream(502, "upstream unreachable"))
+        .mapError {
+          case _: java.io.IOException =>
+            RouteError.Unreachable("upstream unreachable")
+          case other =>
+            RouteError.Upstream(502, Option(other.getMessage).getOrElse(other.toString))
+        }
         .map(response => translate(backend, response, stream))
     }
 

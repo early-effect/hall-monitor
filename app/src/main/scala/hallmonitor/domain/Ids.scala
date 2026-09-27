@@ -21,6 +21,13 @@ object RuleId:
 
   extension (id: RuleId) def value: String = id
 
+opaque type QuotaId <: String = String
+
+object QuotaId:
+  def apply(value: String): QuotaId = value
+
+  extension (id: QuotaId) def value: String = id
+
 opaque type Secret <: String = String
 
 object Secret:

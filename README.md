@@ -55,7 +55,9 @@ TOML, loaded with zio-config (`zio-config-toml`). Put the process keys (`apiKey`
 
 Every secret is either `apiKey` (the token in the file) or `apiKeyEnv` (the name of an environment variable). Set one of them. The same pair is used for the Hall Monitor key, the classifier, and each backend.
 
-Constraints intersect. A PII rule that allows only `local-strong` and `jev-vpc` cannot be widened by a preference for a public model. Preferences only rank inside the models still allowed. `POST /admin/reload` with the bearer token re-reads the file. A bad file keeps the previous policy.
+Constraints intersect. A PII rule that allows only `local-strong` and `jev-vpc` cannot be widened by a preference for a public model. Preferences only rank inside the models still allowed. A model that is down, at `maxInFlight`, or past a quota `stopAt` is skipped inside that set, and the next one there is tried. A pinned name is tried first. `POST /admin/reload` with the bearer token re-reads the file. A bad file keeps the previous policy.
+
+Each routed call logs one JSON object: the locks, the attempts, who served, and how long the classifier and each attempt took. The note is not in it. `GET /admin/calls` returns the recent objects. `GET /admin/pool` says which models last looked up or down. A down model stays configured and comes back when its liveness check succeeds.
 
 `stream: true` is returned as the upstream event stream, after the upstream body has been buffered. Time to first token is the full completion.
 
