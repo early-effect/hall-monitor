@@ -14,7 +14,7 @@ object MyVersions extends ZipxVersions:
   val zioConfig     = Lib("dev.zio", "zio-config", "4.1.0")
   val zioConfigToml = zioConfig.mod("zio-config-toml")
 
-  val heddle = Lib("rocks.earlyeffect", "heddle", "0.4.0")
+  val heddle = Lib("rocks.earlyeffect", "heddle", "0.4.1")
   val hexis  = Lib("rocks.earlyeffect", "hexis", "0.1.0")
 
   val specular        = Lib("rocks.earlyeffect", "specular-core", "0.17.0")
