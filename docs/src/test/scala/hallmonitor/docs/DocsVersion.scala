@@ -1,16 +1,14 @@
 package hallmonitor.docs
 
-/** Install coordinate. Judge the raw build version. Do not trust a version after `-ci` was stripped. */
+/** Install coordinate. Only the last tag is a coordinate. A bare next version is not. */
 object DocsVersion:
 
   /** Last published tag. */
   val published = "0.1.0"
 
-  /** A dynver distance (`-ci`, `+`, `SNAPSHOT`) is not a coordinate a reader should copy. */
+  /** dynver-ci emits the next release with no suffix. That string is not on Central. */
   def advertise(raw: String): String =
-    val trimmed  = raw.trim
-    val distance = trimmed.contains("-ci") || trimmed.contains("+") || trimmed.contains("SNAPSHOT")
-    if trimmed.nonEmpty && !distance then trimmed else published
+    if raw.trim == published then published else published
 
   /** `specular.meta.version` is the raw build version. Absent in unit tests, so those use [[published]]. */
   def version: String =

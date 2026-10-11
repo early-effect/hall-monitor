@@ -64,11 +64,10 @@ lazy val docs = project
     specularMetaProject    := Some(LocalProject("app")),
     specularArtifactKind   := "library",
     specularSiteDirectory  := (ThisBuild / baseDirectory).value / "target" / "site",
-    // Do not strip -ci first. stripCi("0.1.1-ci") is 0.1.1, and a `+` or SNAPSHOT
-    // distance is left untouched. Those are not the published coordinate. The last tag is 0.1.0.
+    // dynver-ci on Actions sets version to the next release with no suffix (0.1.1, not
+    // 0.1.1-ci). Only the last tag is a coordinate. Anything else stays 0.1.0.
     specularDisplayVersion := { (raw: String) =>
-      val distance = raw.contains("-ci") || raw.contains("+") || raw.contains("SNAPSHOT")
-      if raw.nonEmpty && !distance then raw else "0.1.0"
+      if raw.trim == "0.1.0" then "0.1.0" else "0.1.0"
     },
   )
 

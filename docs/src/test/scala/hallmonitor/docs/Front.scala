@@ -89,11 +89,12 @@ The URL picks the door. `ModelKind` is the two of them.
           !coordinate.contains("+"),
           !coordinate.contains("<version>"),
           !coordinate.contains("addSbtPlugin"),
+          DocsVersion.advertise("0.1.1") == DocsVersion.published,
           DocsVersion.advertise("0.1.1-ci") == DocsVersion.published,
           DocsVersion.advertise("0.1.1-SNAPSHOT") == DocsVersion.published,
           DocsVersion.advertise("0.1.0+4-abcdef") == DocsVersion.published,
           DocsVersion.advertise("0.1.0") == "0.1.0",
-          DocsVersion.advertise("0.2.0") == "0.2.0",
+          DocsVersion.advertise("0.2.0") == DocsVersion.published,
         )
       },
       test("the figure is the two doors, and fit keeps it inside a phone column") {
