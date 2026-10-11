@@ -4,10 +4,12 @@ import earlyeffect.docs.EarlyEffectTheme
 import specular.site.*
 import zio.*
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path, StandardCopyOption}
 
 object BuildSite extends DocsSite:
-  def pages =
+
+  /** The guide. The front page is not in this list, so it is not a second sidebar item. */
+  private val guide: Vector[specular.DocPage] =
     Vector(
       TheHallway.doc,
       Installing.doc,
@@ -21,37 +23,23 @@ object BuildSite extends DocsSite:
       TheLog.doc,
     )
 
-  override def site: SiteModel =
-    val branded = EarlyEffectTheme.brand(super.site)
+  /** Not a nav item. The sidebar is the guide; this page is the front. */
+  private val frontPage: specular.DocPage = Front.doc
+
+  def pages: Vector[specular.DocPage] = frontPage +: guide
+
+  override def site(settings: DocsSettings): SiteModel =
+    val branded = EarlyEffectTheme.brand(super.site(settings))
     branded.copy(
-      summaryMarkdown = Some(
-        """**Hall Monitor** stands in the hallway with a clipboard. A harness knocks
-like it would on any provider. Jev reads the note, your rules open the door,
-and the model behind it does the talking.
-"""
-      ),
+      nav = Some(NavModel.flat(guide)),
+      pages = pages,
+      summaryMarkdown = None,
+      installSnippets = Vector(CodeSnippet("Launch", Front.coordinate)),
       brand = Some(
         Brand(
           name = "Hall Monitor",
           links = Vector(EarlyEffectTheme.github("https://github.com/early-effect/hall-monitor")),
         )
-      ),
-      installSnippets = Vector(
-        CodeSnippet(
-          "Launch",
-          "cs launch rocks.earlyeffect::hall-monitor:0.1.0 -- hall-monitor.toml",
-        ),
-        CodeSnippet(
-          "Launcher",
-          """cs bootstrap rocks.earlyeffect::hall-monitor:0.1.0 -o hall-monitor -f
-            |./hall-monitor hall-monitor.toml""".stripMargin,
-        ),
-        CodeSnippet(
-          "Harness",
-          """OpenAI base URL  http://127.0.0.1:8080/v1
-            |model            hall-monitor
-            |Hexis baseUrl    http://127.0.0.1:8080/jev""".stripMargin,
-        ),
       ),
     )
   end site
@@ -59,7 +47,16 @@ and the model behind it does the talking.
   override def layers: ZLayer[Any, Nothing, SiteBuilder] =
     HallTheme.layers
 
-  override def afterBuild(out: Path, result: SiteOutput): Task[Unit] =
+  override def afterBuild(out: Path, result: SiteOutput): IO[SiteError, Unit] =
     val _ = result
-    EarlyEffectTheme.writeLogo(out)
+    // Specular always writes index.html as a summary plus a second copy of the nav.
+    // The front DocPage is the index. Copy it over that file. Asset paths stay site-relative.
+    val front   = out.resolve(s"${frontPage.slug}.html")
+    val index   = out.resolve("index.html")
+    val promote =
+      ZIO.attemptBlockingIO(Files.copy(front, index, StandardCopyOption.REPLACE_EXISTING)).mapError { err =>
+        SiteError.WriteFailed(index, err)
+      }
+    promote *> EarlyEffectTheme.writeLogo(out)
+  end afterBuild
 end BuildSite

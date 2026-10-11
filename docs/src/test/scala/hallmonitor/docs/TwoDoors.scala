@@ -40,9 +40,6 @@ conversational board, fails to find the name, and says so out loud.
     }.assert(name => assertTrue(name == Right("jev-vpc"))),
     exampleValue {
       Hall.chosen(ModelKind.Conversational, Map.empty, Some("jev-vpc"), rules = Hall.policy.copy(rules = Nil))
-    }.assert {
-      case Left(RouteError.UnknownModel("jev-vpc")) => assertTrue(true)
-      case other => assertTrue(false) && assertTrue(other.toString == "expected unknown model")
-    },
+    }.assert(name => assertTrue(name == Left(RouteError.UnknownModel("jev-vpc")))),
   )
 end TwoDoors

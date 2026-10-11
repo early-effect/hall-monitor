@@ -64,7 +64,11 @@ lazy val docs = project
     specularMetaProject    := Some(LocalProject("app")),
     specularArtifactKind   := "library",
     specularSiteDirectory  := (ThisBuild / baseDirectory).value / "target" / "site",
-    specularDisplayVersion := stripCi,
+    // dynver-ci on Actions sets version to the next release with no suffix (0.1.1, not
+    // 0.1.1-ci). Only the last tag is a coordinate. Anything else stays 0.1.0.
+    specularDisplayVersion := { (raw: String) =>
+      if raw.trim == "0.1.0" then "0.1.0" else "0.1.0"
+    },
   )
 
 lazy val root = project

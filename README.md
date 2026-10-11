@@ -2,10 +2,7 @@
 
 Someone has to stand in the hallway.
 
-They read the note, check the rules, and point at a door. A harness knocks the
-way it knocks on any provider. The guide is allowed to enjoy the job: the
-hallway, installing, the two doors, the note, the questions, the house rules,
-the keys, and the tape. Preview it with `sbt docsPreview`.
+Docs: [earlyeffect.rocks/hall-monitor](https://www.earlyeffect.rocks/hall-monitor/)
 
 Conversational calls (`POST /v1/chat/completions`) only go to conversational backends. Decision calls (`POST /jev/v1/systemone`) only go to decision backends. The URL picks the kind. Jev does not.
 
