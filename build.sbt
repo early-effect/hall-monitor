@@ -64,10 +64,18 @@ lazy val docs = project
     specularMetaProject    := Some(LocalProject("app")),
     specularArtifactKind   := "library",
     specularSiteDirectory  := (ThisBuild / baseDirectory).value / "target" / "site",
-    // dynver-ci on Actions sets version to the next release with no suffix (0.1.1, not
-    // 0.1.1-ci). Only the last tag is a coordinate. Anything else stays 0.1.0.
+    // The docs workflow sets SPECULAR_STRIP_CI, which ignores this setting and
+    // only strips a trailing -ci. A bare next version or a + distance would still
+    // show. The forked builder reads -Dspecular.meta.displayVersion, pinned below.
+    // Update the string in the same commit that tags the next release.
     specularDisplayVersion := { (raw: String) =>
-      if raw.trim == "0.1.0" then "0.1.0" else "0.1.0"
+      val published = "0.1.0"
+      if raw.trim == published then published else published
+    },
+    specularMetaProps := Def.uncached {
+      val published = specularDisplayVersion.value("")
+      val pinned    = s"-Dspecular.meta.displayVersion=$published"
+      specularMetaProps.value.filterNot(_.startsWith("-Dspecular.meta.displayVersion=")) :+ pinned
     },
   )
 
