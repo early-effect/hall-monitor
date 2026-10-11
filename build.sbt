@@ -64,7 +64,12 @@ lazy val docs = project
     specularMetaProject    := Some(LocalProject("app")),
     specularArtifactKind   := "library",
     specularSiteDirectory  := (ThisBuild / baseDirectory).value / "target" / "site",
-    specularDisplayVersion := stripCi,
+    // Do not strip -ci first. stripCi("0.1.1-ci") is 0.1.1, and a `+` or SNAPSHOT
+    // distance is left untouched. Those are not the published coordinate. The last tag is 0.1.0.
+    specularDisplayVersion := { (raw: String) =>
+      val distance = raw.contains("-ci") || raw.contains("+") || raw.contains("SNAPSHOT")
+      if raw.nonEmpty && !distance then raw else "0.1.0"
+    },
   )
 
 lazy val root = project

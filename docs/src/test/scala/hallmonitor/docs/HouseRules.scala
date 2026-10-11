@@ -86,10 +86,16 @@ call, another model still in the room may answer. The response says who did.
     }.assert(name => assertTrue(name == Right("local-fast"))),
     exampleValue {
       Hall.chosen(ModelKind.Conversational, Map(noul("pii", 0.95)), Some("public-heavy"))
-    }.assert {
-      case Left(RouteError.ModelNotAllowed("public-heavy", _)) => assertTrue(true)
-      case other                                               => assertTrue(other.toString.isEmpty)
-    },
+    }.assert(name =>
+      assertTrue(
+        name == Left(
+          RouteError.ModelNotAllowed(
+            "public-heavy",
+            List(BackendId("local-fast"), BackendId("local-strong")),
+          )
+        )
+      )
+    ),
     exampleValue {
       Hall.chosen(ModelKind.Decision, Map(noul("pii", 0.95)))
     }.assert(name => assertTrue(name == Right("jev-vpc"))),
