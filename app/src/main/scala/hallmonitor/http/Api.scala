@@ -196,7 +196,6 @@ object Api:
                               incoming.body,
                               reading.asked,
                             )
-                        end match
                       }
                     }
                 },
@@ -270,8 +269,6 @@ object Api:
               response,
             )
           }
-    end match
-  end admit
 
   private def finish(
       gate: Gate,
@@ -319,7 +316,6 @@ object Api:
       case (Some(from), Some(to)) if from != to =>
         withUpstream.withHeader("x-hall-monitor-fallback-from", from.value)
       case _ => withUpstream
-  end timings
 
   private def millis(duration: Duration): String =
     duration.toMillis.toString
@@ -339,7 +335,6 @@ object Api:
         )
       else withBackend
     if asked then withClassifier.withHeader("x-hall-monitor-truncated", truncated.toString) else withClassifier
-  end annotate
 
   private def authorized(request: Request, expected: Secret): Boolean =
     request.headers.get[Authorization] match
@@ -366,7 +361,6 @@ object Api:
         )
       ),
     )
-  end openAiModels
 
   private def jevModels(policy: Policy): Json =
     Json.Obj(
@@ -395,7 +389,6 @@ object Api:
       case RouteError.NoneAvailable(_)      => Status.ServiceUnavailable
       case RouteError.Upstream(code, _)     => Status.fromCode(code)
     json(status, wire.body(failure))
-  end error
 
   private def errors(messages: List[String]): String =
     Json.Obj("errors" -> Json.Arr(Chunk.fromIterable(messages.map(Json.Str(_))))).toJson
@@ -438,7 +431,5 @@ object Api:
               )
             )
             .toJson
-      end match
-    end body
   end Wire
 end Api

@@ -29,7 +29,6 @@ object AdmitSpec extends ZIOSpecDefault:
         called == List("local", "fast"),
         result.attempts.collect { case Attempt.Called(id, _, _, Some(Fall.Unreachable)) => id.value } == List("local"),
       )
-      end for
     },
     test("a saturated backend is not called") {
       val local = backend("local", max = Some(1))
@@ -44,7 +43,6 @@ object AdmitSpec extends ZIOSpecDefault:
         result.served.isEmpty,
         result.attempts == List(Attempt.Skipped(local.id, Skip.Saturated(1, 1))),
       )
-      end for
     },
     test("a quota at the stop line is not called and a failed probe leaves the backend eligible") {
       val name  = QuotaId("grok-build")
@@ -81,7 +79,6 @@ object AdmitSpec extends ZIOSpecDefault:
         after == 1,
         missed.served.map(_.id.value).contains("grok"),
       )
-      end for
     },
     test("backends that share a grok quota leave together") {
       val name  = QuotaId("grok-build")
@@ -129,7 +126,6 @@ object AdmitSpec extends ZIOSpecDefault:
         result.served.isEmpty,
         result.failure.exists(_.isInstanceOf[RouteError.NoneAvailable]),
       )
-      end for
     },
     test("a 400 is returned and a 429 falls through onto a cooldown") {
       val first  = backend("first")
@@ -168,7 +164,6 @@ object AdmitSpec extends ZIOSpecDefault:
         called == List("first", "second"),
         until.contains(5_000L),
       )
-      end for
     },
     test("without a liveness check a down backend is retried after the window") {
       val remote = backend("remote", "https://api.example")
@@ -193,7 +188,6 @@ object AdmitSpec extends ZIOSpecDefault:
         third.served.map(_.id).contains(remote.id),
         after == 2,
       )
-      end for
     },
     test("interrupting an attempt releases the permit") {
       val model = backend("local")
@@ -214,7 +208,6 @@ object AdmitSpec extends ZIOSpecDefault:
         _    <- fiber.interrupt
         held <- pool.inFlight(model.id)
       yield assertTrue(held == 0)
-      end for
     },
     test("an up check puts a down backend back and does not clear quota or a cooldown") {
       val model = backend("local", "http://127.0.0.1:9", liveness = Some(Liveness(1, 1, None, enabled = true)))
@@ -252,7 +245,6 @@ object AdmitSpec extends ZIOSpecDefault:
         read.flatMap(_.used).contains(0.99),
         again.attempts == List(Attempt.Skipped(model.id, Skip.CoolingDown(30_000L))),
       )
-      end for
     },
     test("a repeated down check logs one transition") {
       val model = backend("local", "http://127.0.0.1:9", liveness = Some(Liveness(1, 1, None, enabled = true)))
@@ -266,7 +258,6 @@ object AdmitSpec extends ZIOSpecDefault:
         _       <- Checks.tick(current, pool, failing, due)
         second  <- pool.transitionsSoFar
       yield assertTrue(first == Chunk("local down"), second == Chunk("local down"))
-      end for
     },
     test("loopback is checked, a remote without a table is not, and a 404 without a path is up") {
       val local  = backend("local", "http://127.0.0.1:9")
@@ -285,7 +276,6 @@ object AdmitSpec extends ZIOSpecDefault:
         snap.find(_.id == local.id).map(_.presence).contains("up"),
         snap.find(_.id == remote.id).map(_.presence).contains("unchecked"),
       )
-      end for
     },
     test("a configured path that is not 2xx marks the backend down") {
       val local =
@@ -302,7 +292,6 @@ object AdmitSpec extends ZIOSpecDefault:
         urls.exists(_.contains("/health")),
         snap.map(_.presence) == List("down"),
       )
-      end for
     },
     test("closing the liveness scope stops the loop") {
       val local = backend("local", "http://127.0.0.1:9", liveness = Some(Liveness(1, 1, None, enabled = true)))
@@ -318,7 +307,6 @@ object AdmitSpec extends ZIOSpecDefault:
         _     <- TestClock.adjust(5.seconds)
         after <- seen.get
       yield assertTrue(mid >= 1, after == mid)
-      end for
     },
     test("an explicit disabled table turns off the loopback default") {
       val local = backend(

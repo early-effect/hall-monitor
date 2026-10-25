@@ -31,7 +31,6 @@ object Resolve:
           case preference: Rule.Preference =>
             val step = Step.Preference(preference.id, judged, judged == Ruling.Applies, preference.prefer)
             (current, acc :+ step)
-        end match
       }
     val prefs = policy.rules.collect {
       case rule: Rule.Preference if steps.collectFirst {
@@ -60,8 +59,6 @@ object Resolve:
       case None =>
         val order = rank(policy, narrowed, prefs)
         plan(order, trace.copy(steps = steps :+ Step.Ranked(order.map(_.id))), None)
-    end match
-  end apply
 
   private def plan(order: List[Backend], trace: Trace, rejected: Option[RouteError]): RoutePlan =
     RoutePlan(order, trace, rejected)
@@ -77,7 +74,6 @@ object Resolve:
       val defaultScore = if defaultAt < 0 then policy.defaultPrefer.length else defaultAt
       (ruleScore, defaultScore, order.getOrElse(backend.id, Int.MaxValue))
     }
-  end rank
 
   private def judgeRule(
       when: List[Predicate],

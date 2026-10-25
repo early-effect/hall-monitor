@@ -26,7 +26,6 @@ object Shape:
     if tools.nonEmpty then
       fields = fields :+ ("tools" -> Json.Arr(zio.Chunk.fromIterable(tools))) :+ ("tool_choice" -> Json.Str("auto"))
     Json.Obj(zio.Chunk.fromIterable(fields))
-  end responses
 
   def fromResponses(model: String, body: Json.Obj): Json.Obj =
     val output  = arr(body, "output")
@@ -40,7 +39,6 @@ object Shape:
         "tool_calls" -> Json.Arr(zio.Chunk.fromIterable(calls)),
       )
     completion(model, message, if calls.isEmpty then "stop" else "tool_calls", body)
-  end fromResponses
 
   def messages(payload: Json.Obj, model: String): Json.Obj =
     val messages = arr(payload, "messages")
@@ -55,7 +53,6 @@ object Shape:
     if systems.nonEmpty then fields = fields :+ ("system" -> Json.Str(systems.mkString("\n\n")))
     if tools.nonEmpty then fields = fields :+ ("tools" -> Json.Arr(zio.Chunk.fromIterable(tools)))
     Json.Obj(zio.Chunk.fromIterable(fields))
-  end messages
 
   def fromMessages(model: String, body: Json.Obj): Json.Obj =
     val blocks  = arr(body, "content")
@@ -73,7 +70,6 @@ object Shape:
       case Some(Json.Str("tool_use")) => "tool_calls"
       case _                          => "stop"
     completion(model, message, reason, body)
-  end fromMessages
 
   def asEventStream(completion: Json.Obj): String =
     val message = completion.get("choices").collect { case Json.Arr(values) => values.headOption }.flatten match
@@ -91,7 +87,6 @@ object Shape:
       ),
     )
     s"data: ${chunk.toJson}\n\ndata: [DONE]\n\n"
-  end asEventStream
 
   private def completion(model: String, message: Json, reason: String, body: Json.Obj): Json.Obj =
     val usage = body.get("usage").collect { case usage: Json.Obj =>
@@ -116,7 +111,6 @@ object Shape:
         usage.map("usage" -> _),
       ).flatten*
     )
-  end completion
 
   private def rename(payload: Json.Obj, from: String, to: String): Json.Obj =
     if payload.get(to).isDefined || payload.get(from).isEmpty then payload
@@ -222,7 +216,6 @@ object Shape:
         "parameters"  -> function.get("parameters").getOrElse(Json.Obj()),
       )
     }
-  end responseTool
 
   private def outputText(item: Json.Obj): Option[String] =
     item.get("type") match

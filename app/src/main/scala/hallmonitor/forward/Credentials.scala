@@ -77,7 +77,6 @@ object GrokSession:
         }
       }
     }
-  end token
 
   private def read(path: Path): IO[RouteError, Session] =
     ZIO
@@ -164,7 +163,6 @@ object GrokSession:
                     }
                   case _ => ZIO.fail(RouteError.Upstream(502, "grok session refresh returned no access_token"))
               case Left(_) => ZIO.fail(RouteError.Upstream(502, "grok session refresh failed"))
-            end match
       }
     }
 

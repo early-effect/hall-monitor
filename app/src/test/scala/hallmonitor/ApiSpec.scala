@@ -132,7 +132,6 @@ object ApiSpec extends ZIOSpecDefault:
         response.header(HeaderName.ContentType).exists(_.contains("text/event-stream")),
         text == sse,
       )
-      end for
     },
     test("a PII script refuses a public heavy model and does not call upstream") {
       for
@@ -266,7 +265,6 @@ object ApiSpec extends ZIOSpecDefault:
             response.status == Status.Ok,
             forwarded.nonEmpty,
           )
-          end for
         }
     },
   )

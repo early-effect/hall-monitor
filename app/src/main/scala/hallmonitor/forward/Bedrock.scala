@@ -92,7 +92,6 @@ object BedrockSession:
       if expires - now > PreemptMs then ZIO.succeed(token)
       else refresh(token, region, client).flatMap(updated => writeJson(path, updated).as(updated))
     }
-  end accessToken
 
   private def refresh(token: Json.Obj, region: String, client: Client): IO[RouteError, Json.Obj] =
     val missing = List("refreshToken", "clientId", "clientSecret").filter(key => token.get(key).isEmpty)
@@ -135,8 +134,6 @@ object BedrockSession:
                   }
                 case _ => ZIO.fail(RouteError.Upstream(502, "AWS SSO refresh returned no access token"))
       }
-    end if
-  end refresh
 
   private def getRole(
       region: String,
@@ -168,7 +165,6 @@ object BedrockSession:
                     case _ => ZIO.fail(RouteError.Upstream(502, "AWS SSO role credentials were incomplete"))
                 case _ => ZIO.fail(RouteError.Upstream(502, "AWS SSO role credentials were incomplete"))
     }
-  end getRole
 
   private def readJson(path: Path, missing: String): IO[RouteError, Json.Obj] =
     ZIO.attempt(Files.readString(path).fromJson[Json.Obj]).mapError(_ => RouteError.Upstream(502, missing)).flatMap {
@@ -241,7 +237,6 @@ object BedrockBearer:
     ).map((key, value) => s"${encode(key)}=${encode(value)}").mkString("&")
     val presigned = s"$Host/?$shown&X-Amz-Signature=$signature&Version=1"
     "bedrock-api-key-" + java.util.Base64.getEncoder.encodeToString(presigned.getBytes(StandardCharsets.UTF_8))
-  end token
 
   def encode(value: String): String =
     val bytes = value.getBytes(StandardCharsets.UTF_8)
@@ -279,6 +274,7 @@ final class AwsConfig(sections: Map[String, Map[String, String]]):
 
   def session(name: String): Option[Map[String, String]] =
     sections.get(s"sso-session $name")
+end AwsConfig
 
 object AwsConfig:
   def parse(text: String): AwsConfig =
@@ -297,5 +293,3 @@ object AwsConfig:
           section.update(key, value)
     }
     new AwsConfig(sections.view.mapValues(_.toMap).toMap)
-  end parse
-end AwsConfig

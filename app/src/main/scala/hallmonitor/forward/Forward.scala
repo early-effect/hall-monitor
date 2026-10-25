@@ -47,8 +47,6 @@ object Forward:
           Shape.messages(payload, backend.upstreamModel),
           "application/json",
         )
-    end match
-  end prepared
 
   private def chatCompat(backend: Backend): ChatCompat =
     backend.wire match
@@ -66,7 +64,6 @@ object Forward:
       case UpstreamWire.Messages(extra) =>
         extra.foldLeft(proxied) { (acc, pair) => acc.add(HeaderName(pair._1), pair._2) }
       case _ => proxied
-  end extra
 
   private def translate(backend: Backend, response: Response, stream: Boolean): Response =
     if response.status.code >= 400 then response

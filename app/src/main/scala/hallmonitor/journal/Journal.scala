@@ -61,7 +61,6 @@ object Journal:
       record.failure.map(error => "failure" -> Json.Str(error.message)),
     ).flatten
     Json.Obj(Chunk.fromIterable(fields))
-  end view
 
   private def answers(values: Map[CriterionId, Answer[?]]): List[Json] =
     values.toList.sortBy(_._1.value).map { (id, answer) =>
@@ -83,7 +82,6 @@ object Journal:
             "score"      -> Json.Num(score.score),
             "confidence" -> Json.Num(score.confidence),
           )
-      end match
     }
 
   private def step(value: Step): Json =

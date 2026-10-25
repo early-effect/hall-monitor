@@ -99,7 +99,6 @@ object Validate:
           downForSeconds = raw.downForSeconds,
         )
       )
-    end if
   end apply
 
   private def readBackend(
@@ -202,8 +201,6 @@ object Validate:
           quotaName.map(QuotaId(_)),
         )
       )
-    end if
-  end readBackend
 
   private def readCriterion(raw: CriterionRaw): Either[List[ConfigError], Criterion] =
     val id    = raw.id.trim
@@ -244,7 +241,6 @@ object Validate:
               if key.trim.isEmpty then found += ConfigError.EmptyId(s"$owner option")
             }
             Some(Criterion.Choice(CriterionId(id), raw.instructions, options.toList, faces))
-        end match
       case "score" =>
         if raw.yes.isDefined then found += ConfigError.ForeignField(id, "yes")
         if raw.no.isDefined then found += ConfigError.ForeignField(id, "no")
@@ -261,7 +257,6 @@ object Validate:
         found += ConfigError.BadKind(owner, other)
         None
     if found.nonEmpty then Left(found.toList) else Right(criterion.get)
-  end readCriterion
 
   private def readRule(
       raw: RuleRaw,
@@ -297,8 +292,6 @@ object Validate:
       case other =>
         found += ConfigError.BadKind(owner, other)
         Left(found.toList)
-    end match
-  end readRule
 
   private def readPredicate(
       rule: String,
@@ -359,9 +352,6 @@ object Validate:
                         found += ConfigError.ForeignField(name, "level")
                         None
               }
-          end match
-    end if
-  end readPredicate
 
   private def checkFaces(
       rule: String,
@@ -390,8 +380,6 @@ object Validate:
           val covered = names.exists(id => backends.get(id).exists(_.kind == face))
           if !covered then found += ConfigError.AllowMissesFace(rule, face.toString.toLowerCase)
         }
-    end if
-  end checkFaces
 
   private def probability(
       owner: String,

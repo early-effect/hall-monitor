@@ -51,4 +51,3 @@ monitor has met that trick before.
       )
     }.assert(name => assertTrue(name == Right("local-fast"))),
   )
-end TheNote

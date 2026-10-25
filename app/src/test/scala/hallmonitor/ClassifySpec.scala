@@ -97,7 +97,6 @@ object ClassifySpec extends ZIOSpecDefault:
               case _ => ""
           case _ => ""
         assertTrue(reading.truncated, sent.length <= 20, sent.nonEmpty)
-      end for
     },
   )
 
