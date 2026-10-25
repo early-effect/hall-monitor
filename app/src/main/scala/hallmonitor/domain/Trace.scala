@@ -19,7 +19,6 @@ enum Step:
   case Preference(id: RuleId, ruling: Ruling, ranked: Boolean, prefer: List[BackendId])
   case Pinned(name: String, backend: BackendId)
   case Ranked(order: List[BackendId])
-end Step
 
 final case class Trace(
     requested: Option[String],

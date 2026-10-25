@@ -21,4 +21,3 @@ shorter clock. Picking who speaks should finish before the speech does. How
 long the classifier and each attempt took is on the log page.
 """
   )
-end TheTape

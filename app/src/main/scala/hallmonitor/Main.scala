@@ -17,33 +17,30 @@ object Main extends ZIOAppDefault:
 
   def run =
     stopOnIntOrTerm *>
-      program.catchAllCause { cause =>
+      (for
+        args <- getArgs
+        env  <- System.envs.orDie
+        path = Load.resolvePath(args.toList, env.get)
+        loaded    <- Load.fromFile(path, env.get).tapError(failure => ZIO.logError(failure.render))
+        current   <- Ref.make(loaded)
+        client    <- ZIO.service[Client].provide(ZLayer.succeed(clientConfig(loaded)) >>> Client.layer)
+        transport <- ZIO.service[hexis.Transport].provide(ZLayer.succeed(bootstrap) >>> hexis.Transport.live)
+        reload = System.envs.orDie.flatMap(next => Load.fromFile(path, next.get))
+        tokens    <- TokenCache.make(client)
+        discovery <- Ref.make(Option.empty[String])
+        pool      <- Pool.make(quota => GrokQuota.fetch(quota, client, discovery))
+        journal   <- Journal.make
+        _ <- ZIO.logInfo(s"hall-monitor listening on ${loaded.listen.host}:${loaded.listen.port} (Ctrl-C to stop)")
+        _ <- ZIO.scoped {
+          Checks.supervise(current, pool, client).forkScoped *>
+            Server.serve(
+              Api.routes(Gate(current, transport, client, tokens, reload, journal, pool)),
+              serverConfig(loaded),
+            )
+        }
+      yield ()).catchAllCause { cause =>
         if cause.isInterruptedOnly then ZIO.unit else ZIO.refailCause(cause)
       }
-
-  private val program =
-    for
-      args <- getArgs
-      env  <- System.envs.orDie
-      path = Load.resolvePath(args.toList, env.get)
-      loaded    <- Load.fromFile(path, env.get).tapError(failure => ZIO.logError(failure.render))
-      current   <- Ref.make(loaded)
-      client    <- ZIO.service[Client].provide(ZLayer.succeed(clientConfig(loaded)) >>> Client.layer)
-      transport <- ZIO.service[hexis.Transport].provide(ZLayer.succeed(bootstrap) >>> hexis.Transport.live)
-      reload = System.envs.orDie.flatMap(next => Load.fromFile(path, next.get))
-      tokens    <- TokenCache.make(client)
-      discovery <- Ref.make(Option.empty[String])
-      pool      <- Pool.make(quota => GrokQuota.fetch(quota, client, discovery))
-      journal   <- Journal.make
-      _ <- ZIO.logInfo(s"hall-monitor listening on ${loaded.listen.host}:${loaded.listen.port} (Ctrl-C to stop)")
-      _ <- ZIO.scoped {
-        Checks.supervise(current, pool, client).forkScoped *>
-          Server.serve(
-            Api.routes(Gate(current, transport, client, tokens, reload, journal, pool)),
-            serverConfig(loaded),
-          )
-      }
-    yield ()
 
   /** Ctrl-C and `kill` both stop the process. sbt treats a raw SIGINT status of 130 as a crash, so exit 0. */
   private val stopOnIntOrTerm: UIO[Unit] =

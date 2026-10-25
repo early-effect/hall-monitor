@@ -78,4 +78,3 @@ object WireSpec extends ZIOSpecDefault:
       )
     },
   )
-end WireSpec

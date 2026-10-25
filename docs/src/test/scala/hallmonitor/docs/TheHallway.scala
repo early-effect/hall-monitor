@@ -35,4 +35,3 @@ or point hexis at `http://127.0.0.1:8080/jev`. The key on the clipboard is yours
 Upstream keys stay in the office.
 """
   )
-end TheHallway

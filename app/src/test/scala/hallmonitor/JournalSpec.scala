@@ -66,4 +66,3 @@ object JournalSpec extends ZIOSpecDefault:
       )
     }
   )
-end JournalSpec

@@ -69,7 +69,6 @@ object Checks:
         case Right(response) if response.status.code / 100 == 2 => true
         case Right(_)                                           => false
       }
-  end check
 
   private def join(base: String, path: String): String =
     val suffix = if path.startsWith("/") then path else "/" + path

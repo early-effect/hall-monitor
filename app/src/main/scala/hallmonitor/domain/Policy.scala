@@ -14,6 +14,7 @@ object ModelKind:
       case "conversational" => Some(Conversational)
       case "decision"       => Some(Decision)
       case _                => None
+end ModelKind
 
 enum BackendAuth:
   case Key(secret: Secret)
@@ -56,7 +57,6 @@ final case class Backend(
     auth match
       case BackendAuth.Key(secret) => secret
       case _                       => Secret("")
-end Backend
 
 enum Criterion:
   def id: CriterionId
@@ -90,6 +90,7 @@ enum Predicate:
   case ChoiceIs(criterion: CriterionId, options: Set[String], minConfidence: Confidence)
   case ScoreAtLeast(criterion: CriterionId, level: String, minConfidence: Confidence)
   case ScoreAtMost(criterion: CriterionId, level: String, minConfidence: Confidence)
+end Predicate
 
 enum Rule:
   def id: RuleId
@@ -97,6 +98,7 @@ enum Rule:
 
   case Constraint(id: RuleId, when: List[Predicate], allow: Set[BackendId])
   case Preference(id: RuleId, when: List[Predicate], prefer: List[BackendId])
+end Rule
 
 final case class Policy(
     backends: List[Backend],

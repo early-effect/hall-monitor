@@ -46,4 +46,3 @@ first, from the process. The terminal is the copy that outlives a scroll.
 on the board. The next check puts it back.
 """
   )
-end TheLog

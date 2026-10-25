@@ -6,6 +6,7 @@ object BackendId:
   def apply(value: String): BackendId = value
 
   extension (id: BackendId) def value: String = id
+end BackendId
 
 opaque type CriterionId <: String = String
 
@@ -13,6 +14,7 @@ object CriterionId:
   def apply(value: String): CriterionId = value
 
   extension (id: CriterionId) def value: String = id
+end CriterionId
 
 opaque type RuleId <: String = String
 
@@ -20,6 +22,7 @@ object RuleId:
   def apply(value: String): RuleId = value
 
   extension (id: RuleId) def value: String = id
+end RuleId
 
 opaque type QuotaId <: String = String
 
@@ -27,6 +30,7 @@ object QuotaId:
   def apply(value: String): QuotaId = value
 
   extension (id: QuotaId) def value: String = id
+end QuotaId
 
 opaque type Secret <: String = String
 
@@ -34,6 +38,7 @@ object Secret:
   def apply(value: String): Secret = value
 
   extension (secret: Secret) def reveal: String = secret
+end Secret
 
 object Names:
   val Auto: String = "hall-monitor"

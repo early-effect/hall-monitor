@@ -43,4 +43,3 @@ comes back with the reason, which is the polite version of "try again."
       Hall.chosen(ModelKind.Decision, Map.empty, Some("jev-latest"), rules = Hall.policy.copy(rules = Nil))
     }.assert(name => assertTrue(name == Left(RouteError.UnknownModel("jev-latest")))),
   )
-end AHarness

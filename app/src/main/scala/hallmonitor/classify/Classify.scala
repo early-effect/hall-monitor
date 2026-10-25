@@ -90,8 +90,6 @@ object Classify:
                     ),
                 )
             }
-    end if
-  end run
 
   def summary(answers: Map[CriterionId, Answer[?]]): String =
     answers.toList

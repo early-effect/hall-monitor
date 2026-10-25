@@ -42,4 +42,3 @@ conversational board, fails to find the name, and says so out loud.
       Hall.chosen(ModelKind.Conversational, Map.empty, Some("jev-vpc"), rules = Hall.policy.copy(rules = Nil))
     }.assert(name => assertTrue(name == Left(RouteError.UnknownModel("jev-vpc")))),
   )
-end TwoDoors

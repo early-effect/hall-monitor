@@ -55,7 +55,6 @@ gets in.
       },
     )
     story + checks
-  end spec
 
   private val frontDoor: String =
     """

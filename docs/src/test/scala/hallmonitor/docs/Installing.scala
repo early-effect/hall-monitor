@@ -148,4 +148,3 @@ message, and status 1.
 """
     ),
   )
-end Installing
